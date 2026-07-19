@@ -1,4 +1,4 @@
-wlanpi-mcp (0.3.4) unstable; urgency=medium
+wlanpi-mcp (0.3.4-1) unstable; urgency=medium
 
   * Align tooling and packaging with the WLAN-Pi organization standard,
     using wlanpi-core as the reference. Adopt a Python 3.13-only floor:
