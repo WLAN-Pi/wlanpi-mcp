@@ -1,0 +1,117 @@
+wlanpi-mcp (0.3.4) unstable; urgency=medium
+
+  * Align tooling and packaging with the WLAN-Pi organization standard,
+    using wlanpi-core as the reference. Adopt a Python 3.13-only floor:
+    requires-python is now >=3.13, the 3.11/3.12 classifiers are replaced
+    with a single 3.13 classifier, and debian/control Build-Depends,
+    X-Python3-Version, and Pre-Depends all require python3 (>= 3.13).
+  * Add the six org-standard GitHub Actions workflows under
+    .github/workflows/: test-python-package (tox on a 3.13 matrix),
+    python-format-police (tox -e formatcheck), python-lint-police
+    (tox -e lint), codeql-analysis, build-and-archive-debian-package and
+    deploy-to-packagecloud (both via the reusable WLAN-Pi/gh-workflows
+    sbuild + packagecloud pipeline).
+  * Add .github/dependabot.yml (weekly pip updates scoped to the runtime
+    dependencies) and a tox.ini providing the test, lint, format,
+    formatcheck, and flake8 environments with the autoflake/black/isort/
+    flake8 toolchain, plus scripts/check_whitespace.sh and
+    scripts/fix_whitespace.sh.
+  * Add [tool.black] (py313 target) and [tool.isort] (black profile) to
+    pyproject.toml.
+
+ -- Josh Schmelzle <josh@joshschmelzle.com>  Sat, 19 Jul 2026 12:00:00 -0400
+
+wlanpi-mcp (0.3.3) unstable; urgency=medium
+
+  * Migrate UFW handling to a ufw application profile, matching the
+    wlanpi-core pattern. The profile is staged at
+    /etc/wlanpi-mcp/ufw/wlanpi-mcp.rules and installed into
+    /etc/ufw/applications.d/wlanpi-mcp by a versioned setup script, which
+    then runs 'ufw allow wlanpi-mcp' instead of a hardcoded '8766/tcp'.
+    The port now lives in one declarative file and the resulting rule is
+    named rather than a bare port literal.
+  * postinst is now chroot-aware: on a live install it applies rules
+    directly; during an image build (chroot, ufw inactive) it enables a
+    wlanpi-mcp-ufw-first-boot.service oneshot to apply them on first boot.
+    This fixes the ufw allow silently no-op'ing at image-build time.
+  * The setup script drops any legacy literal 8766/tcp rule from pre-0.3.3
+    packages so upgrades don't leave a duplicate in 'ufw status'.
+  * postrm removes the (non-dpkg-owned) applications.d profile and the
+    installed-rules-version marker, deleting the rule before the profile
+    so ufw can still resolve the name.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Thu, 16 Jul 2026 18:41:32 +0000
+
+wlanpi-mcp (0.3.2) unstable; urgency=medium
+
+  * Stop suppressing ufw output in postinst/postrm: a field install
+    silently ended up with only the IPv6 allow rule for 8766, leaving
+    LAN MCP clients timing out. Rule add/delete results now appear in
+    the apt/image-build log; '|| true' still prevents install aborts.
+  * Sync wlanpi_mcp.__version__ with the package version (was left at
+    0.3.0 in the 0.3.1 release).
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Thu, 16 Jul 2026 15:51:45 +0000
+
+wlanpi-mcp (0.3.1) unstable; urgency=medium
+
+  * Move default SSE port from 8765 to 8766: 8765 collides with the
+    wlanpi-fpms2 state service, leaving whichever service started second
+    in a crash loop. Updates config default, server fallback, shipped
+    config.env template, install banner, and UFW open/close rules.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Wed, 16 Jul 2026 05:00:00 -0600
+
+wlanpi-mcp (0.3.0) unstable; urgency=medium
+
+  * Security: bind each SSE session to the token that opened it. The
+    middleware publishes a per-token principal (sha256 fingerprint) so the
+    MCP transport rejects any POST /messages/ presenting a different token,
+    closing cross-session tool-call injection when a session id is known.
+  * Tag outbound wlanpi-core calls with 'X-Wlanpi-Client: mcp' so core's
+    nginx routes on-box (localhost) requests to the JWT validator instead of
+    the localhost HMAC path (which needs a root-owned secret this
+    unprivileged service cannot read). Requires the companion wlanpi-core
+    nginx change; on-box JWT passthrough works without pointing
+    WLANPI_CORE_URL at a LAN IP.
+  * docs/auth-flow.md: document the end-to-end auth path and session binding.
+
+ -- WLAN Pi Developers <developers@wlanpi.com>  Thu, 09 Jul 2026 00:00:00 +0000
+
+wlanpi-mcp (0.2.0) unstable; urgency=medium
+
+  * Full endpoint coverage of wlanpi-core 2.1.11 API
+  * New system tools: device model, service restart, datetime/timezone
+    management, reboot/shutdown (gated by ALLOW_POWER_CONTROL, default on),
+    hotspot client count and SSID/passphrase
+  * New network diagnostics tools: routing table, TCP/UDP connections,
+    DHCP leases, per-interface link stats, DHCP renew, WLAN USB/PCI
+    drivers, public IPv6, ethernet interface details
+  * New wifi tools: PHY capabilities, regulatory info, hotspot stations
+    and per-station link stats
+  * New utils tools: speedtest, ethernet port blinker start/stop/status
+  * New bluetooth tool: discoverable pairing mode
+  * Migrated Wi-Fi scan to canonical /api/v1/utils/wlan/scan endpoint
+  * Removed tools backed by deprecated/removed wlan endpoints
+    (connect_wlan, get_wlan_interfaces, get_connected_network) — use the
+    network config tools instead
+  * JWT bearer-token passthrough authentication for SSE transport
+  * postinst: open UFW port 8765/tcp for SSE clients (closed on remove);
+    default config now matches the JWT passthrough design (removes stale
+    API-key/shared-secret settings)
+
+ -- WLAN Pi Developers <developers@wlanpi.com>  Wed, 08 Jul 2026 00:00:00 +0000
+
+wlanpi-mcp (0.1.0) unstable; urgency=medium
+
+  * Initial release — Phase 1 MVP
+  * Read tools: device info/stats, network interfaces, network info,
+    service status, reachability, USB interfaces, UFW status
+  * Write tools: service start/stop (allowlisted services only)
+  * MCP resources: device://info, device://stats, network://interfaces,
+    network://info, services://status/{name}
+  * MCP prompts: diagnose_connectivity, troubleshoot_service,
+    health_check, service_manager
+  * Supports stdio and SSE transports
+
+ -- WLAN Pi Developers <developers@wlanpi.com>  Sat, 26 Apr 2025 00:00:00 +0000

@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    allow:
+      - dependency-name: mcp
+      - dependency-name: httpx
+      - dependency-name: pydantic
+      - dependency-name: pydantic-settings
+      - dependency-name: anyio
+      - dependency-name: starlette
+      - dependency-name: uvicorn

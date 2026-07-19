@@ -1,0 +1,41 @@
+name: Build and Deploy to Packagecloud
+on:
+  # Allow manual runs of workflow from Actions tab
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'debian/changelog'
+jobs:
+  check_version:
+    name: Check py & deb pkg versions match
+    uses: WLAN-Pi/gh-workflows/.github/workflows/check-py-deb-pkg-versions-match.yml@main
+    with:
+      python_version_file_path: 'wlanpi_mcp/__version__.py'
+  format:
+    name: Get formatted version for filename
+    uses: WLAN-Pi/gh-workflows/.github/workflows/get-formatted-version-string.yml@main
+  sbuild_deploy:
+    name: sbuild deploy pkg
+    needs:
+      - format
+      - check_version
+    uses: WLAN-Pi/gh-workflows/.github/workflows/sbuild-deploy-pkg.yml@main
+    with:
+      pkg: wlanpi-mcp
+      version: ${{ needs.format.outputs.version }}
+    secrets: inherit
+  slack-workflow-status:
+    if: ${{ always() && (github.repository_owner == 'WLAN-Pi') && (! github.event.pull_request.head.repo.fork) }}
+    name: Post workflow status to Slack
+    needs:
+      - sbuild_deploy
+    runs-on: "${{ vars.RUNS_ON || 'ubuntu-26.04' }}"
+    steps:
+      - name: Slack Workflow Notification
+        uses: Gamesight/slack-workflow-status@master
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}

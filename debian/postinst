@@ -1,0 +1,66 @@
+#!/bin/sh
+set -e
+
+CONFIG_DIR=/etc/wlanpi-mcp
+CONFIG_FILE=$CONFIG_DIR/config.env
+
+case "$1" in
+    configure)
+        # Create config directory if needed
+        mkdir -p "$CONFIG_DIR"
+
+        # Write default config on first install. Auth is JWT passthrough:
+        # SSE clients send a wlanpi-core token as 'Authorization: Bearer'.
+        if [ ! -f "$CONFIG_FILE" ]; then
+            cat > "$CONFIG_FILE" <<EOF
+WLANPI_CORE_URL=http://localhost:31415
+# Fallback wlanpi-core JWT for stdio transport only. In SSE/daemon mode leave
+# empty: clients must send their own token as 'Authorization: Bearer <token>'.
+WLANPI_CORE_TOKEN=
+WLANPI_MCP_HOST=0.0.0.0
+WLANPI_MCP_PORT=8766
+LOG_LEVEL=INFO
+# Allow MCP clients to reboot/shut down the device. Set false to disable.
+ALLOW_POWER_CONTROL=true
+EOF
+            echo ""
+            echo "============================================================"
+            echo "  WlanPi MCP Server installed (SSE on port 8766)"
+            echo "  Clients authenticate with a wlanpi-core JWT:"
+            echo "  POST http://<device>:31415/api/v1/auth/token"
+            echo "============================================================"
+            echo ""
+        fi
+
+        chmod 640 "$CONFIG_FILE"
+        chown root:wlanpi "$CONFIG_FILE" 2>/dev/null || true
+
+        # Open the SSE port in UFW via the shipped application profile
+        # (/etc/ufw/applications.d/wlanpi-mcp). The setup script installs the
+        # profile and runs `ufw allow wlanpi-mcp`; 8766 is defined in
+        # /etc/wlanpi-mcp/ufw/wlanpi-mcp.rules, adjust there if the port changes.
+        # In a chroot (image build) ufw isn't active, so defer to the first-boot
+        # oneshot service instead of applying rules now.
+        if ischroot; then
+            if [ -f /lib/systemd/system/wlanpi-mcp-ufw-first-boot.service ]; then
+                systemctl enable wlanpi-mcp-ufw-first-boot.service || true
+            fi
+        else
+            if [ -x /etc/wlanpi-mcp/ufw/wlanpi-mcp-ufw-rules-setup.sh ]; then
+                /etc/wlanpi-mcp/ufw/wlanpi-mcp-ufw-rules-setup.sh || true
+            fi
+        fi
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0
