@@ -27,9 +27,9 @@ from wlanpi_mcp.tools import (
 
 def create_server(client: CoreClient, host: str = "0.0.0.0", port: int = 8766) -> FastMCP:
     mcp = FastMCP(
-        "WlanPi",
+        "WLAN Pi",
         instructions=(
-            "WlanPi MCP server — exposes Wi-Fi network testing and analysis capabilities "
+            "WLAN Pi MCP server — exposes Wi-Fi network testing and analysis capabilities "
             "including device info, network interfaces, service management, Wi-Fi scanning, "
             "profiler control, and diagnostics."
         ),

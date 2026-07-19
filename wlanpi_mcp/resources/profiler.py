@@ -24,6 +24,6 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.resource("profiler://status")
     async def profiler_status() -> str:
-        """WlanPi profiler running state, SSID, channel, and interface."""
+        """WLAN Pi profiler running state, SSID, channel, and interface."""
         data = await _cached_get(client, "/api/v1/profiler/status", ttl=10.0)
         return json.dumps(data, indent=2)

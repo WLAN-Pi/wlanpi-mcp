@@ -13,7 +13,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         vlan_id: Optional[int] = None,
     ) -> dict:
         """
-        Get VLAN interfaces on the WlanPi.
+        Get VLAN interfaces on the WLAN Pi.
 
         Args:
             interface: Ethernet interface to filter by (e.g. 'eth0'). If omitted, returns all interfaces.

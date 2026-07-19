@@ -29,7 +29,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool()
     async def get_public_ipv6() -> dict:
-        """Get the WlanPi's public IPv6 address and related details."""
+        """Get the WLAN Pi's public IPv6 address and related details."""
         return await client.get("/api/v1/network/info/publicip6")
 
     @mcp.tool()
@@ -56,7 +56,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def get_tcp_connections(namespace: Optional[str] = None) -> dict:
         """
-        Get active TCP sockets/connections on the WlanPi.
+        Get active TCP sockets/connections on the WLAN Pi.
 
         Args:
             namespace: Optional network namespace to query (default: root namespace)
@@ -67,7 +67,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def get_udp_connections(namespace: Optional[str] = None) -> dict:
         """
-        Get active UDP sockets on the WlanPi.
+        Get active UDP sockets on the WLAN Pi.
 
         Args:
             namespace: Optional network namespace to query (default: root namespace)
@@ -77,7 +77,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool()
     async def get_dhcp_leases() -> dict:
-        """Get DHCP leases held by the WlanPi (parsed from dhclient lease files)."""
+        """Get DHCP leases held by the WLAN Pi (parsed from dhclient lease files)."""
         return await client.get("/api/v1/network/dhcp/leases")
 
     @mcp.tool()

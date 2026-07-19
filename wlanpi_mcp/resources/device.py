@@ -23,14 +23,14 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.resource("device://info")
     async def device_info() -> str:
-        """WlanPi device identity: model, hostname, software version, and operating mode."""
+        """WLAN Pi device identity: model, hostname, software version, and operating mode."""
         import json
         data = await _cached_get(client, "/api/v1/system/device/info", ttl=60.0)
         return json.dumps(data, indent=2)
 
     @mcp.resource("device://stats")
     async def device_stats() -> str:
-        """WlanPi live system metrics: CPU, RAM, disk, temperature, uptime, IP."""
+        """WLAN Pi live system metrics: CPU, RAM, disk, temperature, uptime, IP."""
         import json
         data = await _cached_get(client, "/api/v1/system/device/stats", ttl=10.0)
         return json.dumps(data, indent=2)

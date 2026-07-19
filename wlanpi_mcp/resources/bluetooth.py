@@ -24,6 +24,6 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.resource("bluetooth://status")
     async def bluetooth_status() -> str:
-        """WlanPi Bluetooth adapter status, name, address, power state, and paired devices."""
+        """WLAN Pi Bluetooth adapter status, name, address, power state, and paired devices."""
         data = await _cached_get(client, "/api/v1/bluetooth/status", ttl=15.0)
         return json.dumps(data, indent=2)

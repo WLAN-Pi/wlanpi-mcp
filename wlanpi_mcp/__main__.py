@@ -17,7 +17,7 @@ def _configure_logging(level: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="WlanPi MCP server",
+        description="WLAN Pi MCP server",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

@@ -9,10 +9,10 @@ from wlanpi_mcp.config import Settings, ALLOWED_SERVICES
 @pytest.mark.asyncio
 async def test_get_device_info(client):
     respx.get("http://localhost:31415/api/v1/system/device/info").mock(
-        return_value=httpx.Response(200, json={"model": "WlanPi Pro", "mode": "classic"})
+        return_value=httpx.Response(200, json={"model": "WLAN Pi Pro", "mode": "classic"})
     )
     result = await client.get("/api/v1/system/device/info")
-    assert result["model"] == "WlanPi Pro"
+    assert result["model"] == "WLAN Pi Pro"
 
 
 @respx.mock

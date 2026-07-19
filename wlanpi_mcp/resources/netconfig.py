@@ -24,7 +24,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.resource("netconfig://list")
     async def netconfig_list() -> str:
-        """All saved WlanPi network configuration profiles and their active status."""
+        """All saved WLAN Pi network configuration profiles and their active status."""
         data = await _cached_get(client, "/api/v1/network/config/", ttl=30.0)
         return json.dumps(data, indent=2)
 

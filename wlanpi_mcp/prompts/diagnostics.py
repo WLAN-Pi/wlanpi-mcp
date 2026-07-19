@@ -5,9 +5,9 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.prompt()
     def diagnose_connectivity() -> str:
-        """Run a full connectivity diagnostic on the WlanPi."""
+        """Run a full connectivity diagnostic on the WLAN Pi."""
         return (
-            "You are a network diagnostic assistant with access to WlanPi tools. "
+            "You are a network diagnostic assistant with access to WLAN Pi tools. "
             "Perform a full connectivity diagnostic by doing the following in order:\n"
             "1. Call get_device_info to identify the device model, hostname, and operating mode.\n"
             "2. Call get_device_stats to check CPU, RAM, disk, and temperature for any health issues.\n"
@@ -20,9 +20,9 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.prompt()
     def troubleshoot_service(service_name: str) -> str:
-        """Diagnose why a WlanPi service is not working as expected."""
+        """Diagnose why a WLAN Pi service is not working as expected."""
         return (
-            f"You are a WlanPi service troubleshooter. The user is having trouble with '{service_name}'.\n"
+            f"You are a WLAN Pi service troubleshooter. The user is having trouble with '{service_name}'.\n"
             "1. Call list_allowed_services and verify that the service name is in the list.\n"
             f"2. Call get_service_status with name='{service_name}' to check its current state.\n"
             "3. If the service is stopped, ask the user whether they want you to start it.\n"
@@ -34,9 +34,9 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.prompt()
     def health_check() -> str:
-        """Quick health check of the WlanPi device."""
+        """Quick health check of the WLAN Pi device."""
         return (
-            "You are a WlanPi health checker. Run a quick health assessment:\n"
+            "You are a WLAN Pi health checker. Run a quick health assessment:\n"
             "1. Call get_device_info to confirm the device identity and mode.\n"
             "2. Call get_device_stats and evaluate each metric:\n"
             "   - CPU: warn if > 80%, fail if > 95%\n"
@@ -52,7 +52,7 @@ def register(mcp: FastMCP) -> None:
     def service_manager() -> str:
         """Interactive service start/stop assistant."""
         return (
-            "You are a WlanPi service management assistant.\n"
+            "You are a WLAN Pi service management assistant.\n"
             "1. Call list_allowed_services to show the user which services can be managed.\n"
             "2. Ask the user which service they want to manage and what action: "
             "   status, start, or stop.\n"

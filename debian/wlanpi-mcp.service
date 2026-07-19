@@ -1,5 +1,5 @@
 [Unit]
-Description=WlanPi MCP Server
+Description=WLAN Pi MCP Server
 Wants=wlanpi-core.service
 After=network.target wlanpi-core.service
 

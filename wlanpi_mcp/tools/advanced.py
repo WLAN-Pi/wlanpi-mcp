@@ -12,7 +12,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def get_device_mode() -> dict:
         """
-        Get the current WlanPi operating mode (classic, wconsole, hotspot, wiperf, server, bridge).
+        Get the current WLAN Pi operating mode (classic, wconsole, hotspot, wiperf, server, bridge).
         """
         info = await client.get("/api/v1/system/device/info")
         mode = info.get("mode", "")
@@ -21,7 +21,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def get_regulatory_domain() -> dict:
         """
-        Get the current Wi-Fi regulatory domain (country code) set on the WlanPi.
+        Get the current Wi-Fi regulatory domain (country code) set on the WLAN Pi.
         Returns 'country' as an ISO 3166-1 alpha-2 code.
         """
         return await client.get("/api/v1/system/reg-domain")
@@ -29,7 +29,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def set_regulatory_domain(country_code: str) -> dict:
         """
-        Set the Wi-Fi regulatory domain (country code) on the WlanPi.
+        Set the Wi-Fi regulatory domain (country code) on the WLAN Pi.
 
         This controls which channels and transmit power levels are permitted.
         Use a valid ISO 3166-1 alpha-2 country code (e.g. 'US', 'GB', 'DE').
@@ -47,7 +47,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def get_battery_status() -> dict:
         """
-        Get battery status on WlanPi models with a battery (e.g. WlanPi Pro).
+        Get battery status on WLAN Pi models with a battery (e.g. WLAN Pi Pro).
 
         Returns 'present': false on hardware without a battery, otherwise
         capacity percentage and charging status.

@@ -10,7 +10,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.resource("services://status/{name}")
     async def service_status(name: str) -> str:
-        """Live status of a WlanPi systemd service. Name must be in the allowed services list."""
+        """Live status of a WLAN Pi systemd service. Name must be in the allowed services list."""
         if name not in ALLOWED_SERVICES:
             return json.dumps({"error": f"'{name}' is not an allowed service"})
         data = await client.get("/api/v1/system/service/status", params={"name": name})

@@ -124,10 +124,10 @@ async def test_start_profiler_builds_minimal_body():
 @pytest.mark.asyncio
 async def test_get_bluetooth_status(client):
     respx.get("http://localhost:31415/api/v1/bluetooth/status").mock(
-        return_value=httpx.Response(200, json={"name": "WlanPi", "power": True, "paired_devices": []})
+        return_value=httpx.Response(200, json={"name": "WLAN Pi", "power": True, "paired_devices": []})
     )
     result = await client.get("/api/v1/bluetooth/status")
-    assert result["name"] == "WlanPi"
+    assert result["name"] == "WLAN Pi"
 
 
 @respx.mock

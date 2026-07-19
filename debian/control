@@ -16,9 +16,9 @@ Package: wlanpi-mcp
 Architecture: any
 Pre-Depends: dpkg (>= 1.16.1), python3 (>= 3.13), ${misc:Pre-Depends}
 Depends: ${misc:Depends}, ${shlibs:Depends}, wlanpi-core
-Description: WlanPi MCP Server
+Description: WLAN Pi MCP Server
  wlanpi-mcp provides a Model Context Protocol (MCP) server that exposes
- WlanPi capabilities to AI assistants and MCP-compatible clients.
+ WLAN Pi capabilities to AI assistants and MCP-compatible clients.
  .
  Supports both stdio transport (for direct Claude Desktop integration via SSH)
  and SSE/HTTP transport (for LAN-accessible daemon mode).

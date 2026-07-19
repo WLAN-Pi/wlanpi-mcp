@@ -11,7 +11,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.resource("device://mode")
     async def device_mode() -> str:
-        """Current WlanPi operating mode reported by wlanpi-core."""
+        """Current WLAN Pi operating mode reported by wlanpi-core."""
         try:
             info = await client.get("/api/v1/system/device/info")
             mode = info.get("mode", "")

@@ -28,7 +28,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def start_bluetooth_pairing() -> dict:
         """
-        Put the WlanPi into Bluetooth discoverable pairing mode (starts bt-timedpair)
+        Put the WLAN Pi into Bluetooth discoverable pairing mode (starts bt-timedpair)
         so a phone or laptop can pair with it.
         """
         return await client.post("/api/v1/bluetooth/pair")

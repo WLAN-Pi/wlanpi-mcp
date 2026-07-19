@@ -1,4 +1,4 @@
 [wlanpi-mcp]
-title=WlanPi MCP server
-description=MCP server exposing WlanPi capabilities to AI assistants (SSE transport)
+title=WLAN Pi MCP server
+description=MCP server exposing WLAN Pi capabilities to AI assistants (SSE transport)
 ports=8766/tcp

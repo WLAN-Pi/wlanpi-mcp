@@ -8,25 +8,25 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     @mcp.tool()
     async def get_reachability() -> dict:
         """
-        Test WlanPi network reachability: pings the default gateway, checks DNS resolution,
+        Test WLAN Pi network reachability: pings the default gateway, checks DNS resolution,
         and verifies internet access. Use this to diagnose connectivity problems.
         """
         return await client.get("/api/v1/utils/reachability")
 
     @mcp.tool()
     async def get_usb_interfaces() -> dict:
-        """List USB network adapters currently plugged into the WlanPi."""
+        """List USB network adapters currently plugged into the WLAN Pi."""
         return await client.get("/api/v1/utils/usb")
 
     @mcp.tool()
     async def get_ufw_status() -> dict:
-        """Get the current UFW firewall status and active rules on the WlanPi."""
+        """Get the current UFW firewall status and active rules on the WLAN Pi."""
         return await client.get("/api/v1/utils/ufw")
 
     @mcp.tool()
     async def run_speedtest() -> dict:
         """
-        Run an internet speed test (LibreSpeed CLI) from the WlanPi. Slow: typically
+        Run an internet speed test (LibreSpeed CLI) from the WLAN Pi. Slow: typically
         takes 30-90 seconds to complete. Returns download/upload speed, ping, IP
         address, and the test server used.
         """
