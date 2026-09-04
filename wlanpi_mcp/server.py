@@ -13,6 +13,7 @@ from wlanpi_mcp.tools import (
     advanced,
     bluetooth,
     capture,
+    capture_file,
     netconfig,
     network,
     profiler,
@@ -56,6 +57,8 @@ def create_server(
 
     # Packet capture — wlanpi-core's streaming WebSocket, not REST
     capture.register(mcp, client)
+    # File-backed capture: background pcapng to /tmp, fetched as a blob
+    capture_file.register(mcp, client)
 
     # Resources — Phase 1
     device.register(mcp, client)
