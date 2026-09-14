@@ -1,10 +1,9 @@
 import argparse
-import asyncio
 import logging
 import sys
 
-from wlanpi_mcp.config import get_settings
 from wlanpi_mcp.client.core_client import init_client
+from wlanpi_mcp.config import get_settings
 
 
 def _configure_logging(level: str) -> None:
@@ -48,6 +47,7 @@ def main() -> None:
     port = args.port or settings.WLANPI_MCP_PORT
 
     from wlanpi_mcp.server import create_server
+
     mcp = create_server(client, host=host, port=port)
 
     if args.transport == "stdio":
@@ -58,6 +58,7 @@ def main() -> None:
 
 def _run_sse(mcp, settings, host: str, port: int) -> None:
     import uvicorn
+
     from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
 
     # FastMCP exposes the Starlette ASGI app for SSE via sse_app().

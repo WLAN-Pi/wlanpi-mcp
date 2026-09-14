@@ -67,7 +67,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         if name.replace(".service", "") not in ALLOWED_SERVICES:
             return {"error": f"'{name}' is not in the allowed services list"}
-        return await client.post("/api/v1/system/service/restart", params={"name": name})
+        return await client.post(
+            "/api/v1/system/service/restart", params={"name": name}
+        )
 
     @mcp.tool()
     async def get_device_model() -> dict:

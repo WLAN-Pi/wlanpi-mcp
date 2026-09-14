@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 ALLOWED_SERVICES = [
     "wlanpi-profiler",
     "wlanpi-fpms",

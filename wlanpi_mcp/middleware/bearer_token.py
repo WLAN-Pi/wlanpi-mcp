@@ -60,7 +60,9 @@ class BearerTokenMiddleware:
             return
 
         auth = Headers(scope=scope).get("authorization", "")
-        token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else ""
+        token = (
+            auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else ""
+        )
 
         if not token:
             response = JSONResponse(

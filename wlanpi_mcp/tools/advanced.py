@@ -38,7 +38,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             country_code: Two-letter ISO 3166-1 alpha-2 country code
         """
         if not re.match(r"^[A-Z]{2}$", country_code.upper()):
-            return {"error": "country_code must be a two-letter ISO 3166-1 alpha-2 code (e.g. 'US')"}
+            return {
+                "error": "country_code must be a two-letter ISO 3166-1 alpha-2 code (e.g. 'US')"
+            }
 
         return await client.post(
             "/api/v1/system/reg-domain/set", json={"country": country_code.upper()}

@@ -1,5 +1,3 @@
-from typing import Optional
-
 from mcp.server.fastmcp import FastMCP
 
 from wlanpi_mcp.client.core_client import CoreClient
@@ -71,9 +69,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.patch(f"/api/v1/network/config/{id}", json=config_update)
 
     @mcp.tool()
-    async def activate_network_config(
-        id: str, override_active: bool = False
-    ) -> dict:
+    async def activate_network_config(id: str, override_active: bool = False) -> dict:
         """
         Activate a saved network configuration profile.
 
@@ -87,9 +83,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         )
 
     @mcp.tool()
-    async def deactivate_network_config(
-        id: str, override_active: bool = False
-    ) -> dict:
+    async def deactivate_network_config(id: str, override_active: bool = False) -> dict:
         """
         Deactivate a currently active network configuration profile.
 
