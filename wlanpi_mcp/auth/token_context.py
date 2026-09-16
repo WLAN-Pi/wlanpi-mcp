@@ -5,6 +5,7 @@ The MCP server does not implement its own authentication: clients present a
 JWT issued by wlanpi-core, and that token is passed through on every outbound
 API call, where wlanpi-core validates it.
 """
+
 from contextvars import ContextVar
 from typing import Optional
 

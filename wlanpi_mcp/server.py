@@ -2,18 +2,18 @@ from mcp.server.fastmcp import FastMCP
 
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.prompts import diagnostics
-from wlanpi_mcp.resources import (
-    bluetooth as bt_res,
-    device,
-    mode as mode_res,
-    netconfig as netconfig_res,
-    network as net_res,
-    profiler as profiler_res,
-    services,
-)
+from wlanpi_mcp.resources import bluetooth as bt_res
+from wlanpi_mcp.resources import device
+from wlanpi_mcp.resources import mode as mode_res
+from wlanpi_mcp.resources import netconfig as netconfig_res
+from wlanpi_mcp.resources import network as net_res
+from wlanpi_mcp.resources import profiler as profiler_res
+from wlanpi_mcp.resources import services
 from wlanpi_mcp.tools import (
     advanced,
     bluetooth,
+    capture,
+    capture_file,
     netconfig,
     network,
     profiler,
@@ -25,7 +25,9 @@ from wlanpi_mcp.tools import (
 )
 
 
-def create_server(client: CoreClient, host: str = "0.0.0.0", port: int = 8766) -> FastMCP:
+def create_server(
+    client: CoreClient, host: str = "0.0.0.0", port: int = 8766
+) -> FastMCP:
     mcp = FastMCP(
         "WLAN Pi",
         instructions=(
@@ -52,6 +54,11 @@ def create_server(client: CoreClient, host: str = "0.0.0.0", port: int = 8766) -
 
     # Phase 3 — regulatory domain, mode, battery
     advanced.register(mcp, client)
+
+    # Packet capture — wlanpi-core's streaming WebSocket, not REST
+    capture.register(mcp, client)
+    # File-backed capture: background pcapng to /tmp, fetched as a blob
+    capture_file.register(mcp, client)
 
     # Resources — Phase 1
     device.register(mcp, client)

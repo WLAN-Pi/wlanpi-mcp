@@ -1,3 +1,139 @@
+wlanpi-mcp (0.6.5-1) unstable; urgency=medium
+
+  * capture: capture_scan/capture_observe now also save the raw pcapng to the
+    managed capture directory (Settings.PCAP_CAPTURE_DIR) while returning the
+    dissected summary, and report it as 'pcap_path'/'pcap_bytes'. This lets the
+    streaming summary be verified against the frames with fetch_pcap_file. The
+    saved file uses the same naming as the file-capture tools, so it is also
+    listed by list_pcap_files and fetchable by capture_id. Teeing is
+    best-effort, so a storage problem never breaks a capture.
+  * capture: factor the capture directory, filename scheme and path-confinement
+    check into wlanpi_mcp/capture/storage.py, shared by both the streaming tee
+    and the file-capture tools.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 04 Sep 2026 00:00:00 +0000
+
+wlanpi-mcp (0.6.4-1) unstable; urgency=medium
+
+  * capture: clarify the tool descriptions so streaming vs non-streaming
+    capture is easy to tell apart. capture_scan/capture_observe now name
+    themselves 'streaming' captures; start_pcap_file/stop_pcap_file/
+    list_pcap_files/fetch_pcap_file name themselves 'non-streaming' and no
+    longer use the word 'streaming'. Behaviour is unchanged.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 04 Sep 2026 00:00:00 +0000
+
+wlanpi-mcp (0.6.3-1) unstable; urgency=medium
+
+  * capture: remove the hard 2000-record cap on capture_scan/capture_observe.
+    max_frames is now caller-controlled with no ceiling: a positive value
+    returns up to that many per-frame records, 0 returns counts only, and a
+    negative value returns every frame (no cap). Per-kind counts remain exact
+    regardless. For a genuinely complete capture prefer the file-capture tools
+    over an unbounded capture_scan.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 04 Sep 2026 00:00:00 +0000
+
+wlanpi-mcp (0.6.2-1) unstable; urgency=medium
+
+  * capture: fetch_pcap_file/stop_pcap_file now take 'capture_id' instead of
+    'session_id'. The old name collided with the MCP SSE transport's reserved
+    routing query param (POST /messages/?session_id=...), and some clients drop
+    a tool argument sharing that name before it reaches the server - so a fetch
+    by session_id failed with "pass session_id or path" while fetch by path
+    worked. 'session_id' is kept as a back-compat alias; every result now
+    carries 'capture_id'.
+  * capture: bytes_written now advances while a file capture is running,
+    instead of staying 0 until completion, so it is usable for progress.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 04 Sep 2026 00:00:00 +0000
+
+wlanpi-mcp (0.6.1-1) unstable; urgency=medium
+
+  * capture: make file-backed captures resolvable by session_id from disk, not
+    just from the in-memory registry. The pcapng filename now embeds the
+    session_id (capture-<stamp>-<session_id>.pcapng), so fetch_pcap_file and
+    stop_pcap_file still find a capture by session_id after the registry is
+    gone (e.g. a server restart), and list_pcap_files also lists files left on
+    disk from an earlier run (status 'on_disk'). Fixes fetch_pcap_file needing
+    an explicit path once the server had restarted.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 04 Sep 2026 00:00:00 +0000
+
+wlanpi-mcp (0.6.0-1) unstable; urgency=medium
+
+  * capture: add a file-backed capture family alongside the streaming tools.
+    start_pcap_file starts a capture, hands the owning WebSocket to a
+    background task that writes the raw pcapng byte stream to a managed
+    directory on the device, and returns immediately with the session_id and
+    path - so a capture can run well past the 60 s streaming window.
+    stop_pcap_file ends one early, list_pcap_files shows what is running or
+    done, and fetch_pcap_file returns the file to the client as an MCP blob
+    (application/vnd.tcpdump.pcapng) for analysis in Wireshark/tshark.
+  * capture: this deliberately relaxes two invariants (raw pcap, and a local
+    file) scoped to Settings.PCAP_CAPTURE_DIR (default /tmp/wlanpi-mcp/
+    captures); fetch_pcap_file refuses any path outside it. Every byte still
+    comes from the core capture WebSocket - no subprocess, same JWT. Adds
+    PCAP_CAPTURE_DIR and PCAP_MAX_DURATION_S (default 3600 s) settings.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 04 Sep 2026 00:00:00 +0000
+
+wlanpi-mcp (0.5.1-1) unstable; urgency=medium
+
+  * capture: dissect the QBSS/BSS Load element (IE tag 11) from beacons and
+    probe-responses. Each AP row now carries 'stations' (the associated
+    client count) and 'channel_utilization' (percent), when the AP
+    advertises the element. Merged across beacons so a later frame without
+    the element does not clear it.
+  * packaging: pin the dh_virtualenv interpreter to python3.13 (the
+    requires-python floor) instead of the host default python3, which can
+    drift ahead of the device (Ubuntu 26.04 defaults to 3.14) and yield a
+    venv whose compiled wheels will not load on the 3.13 device.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Sun, 30 Aug 2026 22:29:48 +0000
+
+wlanpi-mcp (0.5.0-1) unstable; urgency=medium
+
+  * capture: greatly expand the dissector now that only the summary is
+    returned. AP rows carry the full 802.11 security picture - the AKM suite
+    list, pairwise and group ciphers, and PMF (MFPC/MFPR) - alongside the
+    compact security label. A new per-frame log covers every frame type: each
+    record names the type/subtype, lists the source/destination addresses
+    (addr1..addr4), carries a full radiotap decode, and, for the frames that
+    carry one, a decoded result (auth algorithm/status, assoc status/AID,
+    deauth/disassoc reason, probe/assoc SSID). Exact per-kind counts are always
+    returned; the per-frame record list is capped by max_frames (0 disables it)
+    so a busy capture stays a summary. The pcapng reader now yields a per-frame
+    timestamp (if_tsresol-aware).
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Sat, 29 Aug 2026 00:02:25 +0000
+
+wlanpi-mcp (0.4.1-1) unstable; urgency=medium
+
+  * capture: fix truncated captures at the end of the window. The owner flow
+    now stops the capture and drains for a short margin (STOP_DRAIN_S) so
+    dumpcap's final flushed frames and the CAPTURE_STOPPED confirmation are
+    dissected before the socket closes, instead of being cut off. Disable the
+    WebSocket client keepalive ping so a long capture is not torn down
+    mid-stream by a pong timeout.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Wed, 26 Aug 2026 03:42:22 +0000
+
+wlanpi-mcp (0.4.0-1) unstable; urgency=medium
+
+  * Add Wi-Fi packet-capture tools backed by the wlanpi-core capture
+    WebSocket (/api/v1/streaming/capture): capture_scan, capture_observe,
+    list_capture_sessions and get_capture_channels. Capture is consumed
+    over the core WebSocket (auth-first, pcapng stream) and dissected
+    locally into AP summaries; no raw pcap is returned to the client.
+  * Add the wlanpi_mcp/capture/ package: an incremental pcapng reader and
+    a stdlib-only radiotap/802.11 dissector vendored from wlanpi-core's
+    capture_harness reference client, plus a CaptureSocket protocol driver.
+  * Add the websockets runtime dependency and pin mcp[cli] to >=1.0,<2
+    (mcp 2.x renames FastMCP and breaks the server).
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Wed, 26 Aug 2026 02:23:58 +0000
+
 wlanpi-mcp (0.3.4-1) unstable; urgency=medium
 
   * Align tooling and packaging with the WLAN-Pi organization standard,
