@@ -6,10 +6,12 @@ where core validates it. This document traces the token end to end, including th
 `X-Real-IP` override that lets on-box (loopback) calls reach core's JWT validator instead
 of its localhost HMAC path.
 
-The MCP SSE endpoint itself is fronted by an MCP-owned nginx site: the uvicorn daemon
-binds loopback-only (127.0.0.1:8767) and nginx terminates TLS on 8766 with the device's
-self-signed cert, so the client handshake - and every forwarded tool call - is encrypted
-in transit, never cleartext on the LAN.
+The MCP SSE endpoint is fronted by an MCP-owned nginx site: the uvicorn daemon
+binds loopback-only (127.0.0.1:8768) and nginx exposes two listeners. `8767`
+terminates the device's self-signed TLS and is the preferred endpoint; `8766`
+is a plaintext fallback for harnesses that cannot validate the self-signed
+cert (e.g. goose), where the JWT crosses the LAN in cleartext. Use 8767
+whenever the harness can be pointed at the cert.
 
 ## Sequence
 
@@ -17,7 +19,7 @@ in transit, never cleartext on the LAN.
 sequenceDiagram
     participant CD as Claude Desktop
     participant MR as mcp-remote (proxy)
-    participant MG as nginx (:8766, MCP TLS front)
+    participant MG as nginx (:8767 TLS / :8766 plaintext, MCP front)
     participant MW as MCP: BearerTokenMiddleware
     participant CC as MCP: CoreClient
     participant NG as nginx (:31415)
@@ -25,8 +27,8 @@ sequenceDiagram
 
     Note over CD,MR: User holds ONE wlanpi-core JWT
     CD->>MR: launch w/ Authorization: Bearer <JWT>
-    MR->>MG: GET /sse (TLS)<br/>Authorization: Bearer <JWT>
-    MG->>MW: proxy_pass → 127.0.0.1:8767/sse
+    MR->>MG: GET /sse (TLS on 8767)<br/>Authorization: Bearer <JWT>
+    MG->>MW: proxy_pass → 127.0.0.1:8768/sse
     alt no / non-Bearer token
         MW-->>MR: 401 (reject tokenless connection)
     else Bearer present
@@ -37,7 +39,7 @@ sequenceDiagram
     Note over CD,CC: later - a tool call (e.g. scan_wlan)
     CD->>MR: CallTool
     MR->>MG: POST /messages/ (TLS)
-    MG->>MW: proxy_pass → 127.0.0.1:8767/messages/
+    MG->>MW: proxy_pass → 127.0.0.1:8768/messages/
     MW->>CC: dispatch tool → CoreClient.get(...)
     CC->>NG: GET /api/v1/... over localhost<br/>Authorization: Bearer <JWT><br/>X-Wlanpi-Client: mcp
     NG->>NG: map X-Wlanpi-Client=="mcp"<br/>⇒ X-Real-IP = 192.0.2.1 (non-loopback)
@@ -76,8 +78,8 @@ flowchart LR
 | Hop | Carries | Auth decision |
 |---|---|---|
 | Claude Desktop → mcp-remote | `Authorization: Bearer <JWT>` | none - just transport |
-| mcp-remote → MCP nginx front (`:8766`, TLS) | same Bearer on the `/sse` connection and each `/messages/` POST | **nginx:** TLS termination with the self-signed cert; the JWT is encrypted in transit |
-| MCP nginx front → MCP middleware | same Bearer, forwarded to `127.0.0.1:8767` | **MCP:** reject if no Bearer (401); else stash JWT in contextvar |
+| mcp-remote → MCP nginx front (`:8767` TLS) | same Bearer on the `/sse` connection and each `/messages/` POST | **nginx:** TLS termination with the self-signed cert; the JWT is encrypted in transit. (`:8766` is the plaintext fallback - same Bearer, but cleartext, for harnesses that cannot validate the cert) |
+| MCP nginx front → MCP middleware | same Bearer, forwarded to `127.0.0.1:8768` | **MCP:** reject if no Bearer (401); else stash JWT in contextvar |
 | MCP CoreClient → core nginx | `Bearer <JWT>` + **`X-Wlanpi-Client: mcp`** | none yet - MCP never validates |
 | core nginx → core (unix socket) | rewrites **`X-Real-IP` → `192.0.2.1`** because of the tag | **nginx:** selects which origin core sees |
 | core `verify_auth_wrapper` | sees non-loopback X-Real-IP + Bearer | **core:** takes JWT branch → validates token, checks revocation |
@@ -118,9 +120,11 @@ with the same `404` as a nonexistent session (`mcp/server/sse.py`). Effect:
   token itself off the principal object.
 
 This closes blind cross-session injection on a trusted network. Transport
-encryption is a separate control and is now provided by the MCP nginx front:
-nginx terminates TLS on 8766 (self-signed cert) in front of the loopback-only
-daemon, so the token never crosses the wire in cleartext.
+encryption is a separate control and is provided by the MCP nginx front:
+nginx terminates TLS on 8767 (self-signed cert) in front of the loopback-only
+daemon, so the token never crosses the wire in cleartext on the preferred
+endpoint. The 8766 plaintext fallback (for harnesses that cannot validate the
+cert) sends the token in cleartext - use it only on a trusted network.
 
 ## Stdio mode
 
