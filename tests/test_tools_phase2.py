@@ -12,7 +12,7 @@ from wlanpi_mcp.config import Settings
 async def test_scan_wlan_uses_canonical_endpoint():
     from unittest.mock import AsyncMock, MagicMock
     from wlanpi_mcp.tools.wlan import register
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer as FastMCP
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"nets": []})
@@ -36,7 +36,7 @@ def test_deprecated_wlan_tools_removed():
     tools (create/activate config, config status)."""
     from unittest.mock import MagicMock
     from wlanpi_mcp.tools.wlan import register
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer as FastMCP
 
     mcp = FastMCP("test")
     register(mcp, MagicMock())
@@ -54,7 +54,7 @@ def test_deprecated_wlan_tools_removed():
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_vlans(client):
-    respx.get("http://localhost:31415/api/v1/network/ethernet/all/vlan").mock(
+    respx.get("https://localhost:31415/api/v1/network/ethernet/all/vlan").mock(
         return_value=httpx.Response(200, json={"eth0.10": []})
     )
     result = await client.get("/api/v1/network/ethernet/all/vlan")
@@ -64,7 +64,7 @@ async def test_get_vlans(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_create_vlan(client):
-    respx.post("http://localhost:31415/api/v1/network/ethernet/eth0/vlan/10").mock(
+    respx.post("https://localhost:31415/api/v1/network/ethernet/eth0/vlan/10").mock(
         return_value=httpx.Response(200, json={"result": {}})
     )
     result = await client.post(
@@ -77,7 +77,7 @@ async def test_create_vlan(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_delete_vlan(client):
-    respx.delete("http://localhost:31415/api/v1/network/ethernet/eth0/vlan/10").mock(
+    respx.delete("https://localhost:31415/api/v1/network/ethernet/eth0/vlan/10").mock(
         return_value=httpx.Response(200, json={"result": {}})
     )
     result = await client.delete("/api/v1/network/ethernet/eth0/vlan/10")
@@ -89,7 +89,7 @@ async def test_delete_vlan(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_profiler_status(client):
-    respx.get("http://localhost:31415/api/v1/profiler/status").mock(
+    respx.get("https://localhost:31415/api/v1/profiler/status").mock(
         return_value=httpx.Response(200, json={"running": False, "ssid": None})
     )
     result = await client.get("/api/v1/profiler/status")
@@ -101,7 +101,7 @@ async def test_get_profiler_status(client):
 async def test_start_profiler_builds_minimal_body():
     from unittest.mock import AsyncMock, MagicMock
     from wlanpi_mcp.tools.profiler import register
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer as FastMCP
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"success": True})
@@ -123,7 +123,7 @@ async def test_start_profiler_builds_minimal_body():
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_bluetooth_status(client):
-    respx.get("http://localhost:31415/api/v1/bluetooth/status").mock(
+    respx.get("https://localhost:31415/api/v1/bluetooth/status").mock(
         return_value=httpx.Response(200, json={"name": "WLAN Pi", "power": True, "paired_devices": []})
     )
     result = await client.get("/api/v1/bluetooth/status")
@@ -133,7 +133,7 @@ async def test_get_bluetooth_status(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_set_bluetooth_power_on(client):
-    respx.post("http://localhost:31415/api/v1/bluetooth/power/on").mock(
+    respx.post("https://localhost:31415/api/v1/bluetooth/power/on").mock(
         return_value=httpx.Response(200, json={"status": "success", "action": "on"})
     )
     result = await client.post("/api/v1/bluetooth/power/on")
@@ -145,7 +145,7 @@ async def test_set_bluetooth_power_on(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_list_network_configs(client):
-    respx.get("http://localhost:31415/api/v1/network/config/").mock(
+    respx.get("https://localhost:31415/api/v1/network/config/").mock(
         return_value=httpx.Response(200, json={"office": True, "home": False})
     )
     result = await client.get("/api/v1/network/config/")
@@ -155,7 +155,7 @@ async def test_list_network_configs(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_activate_network_config(client):
-    respx.post("http://localhost:31415/api/v1/network/config/activate/office").mock(
+    respx.post("https://localhost:31415/api/v1/network/config/activate/office").mock(
         return_value=httpx.Response(200, json={"id": "office", "message": "Configuration activated successfully"})
     )
     result = await client.post("/api/v1/network/config/activate/office")

@@ -10,7 +10,7 @@ FAKE_TOKEN = "fake.jwt.token"
 @pytest.fixture
 def settings():
     return Settings(
-        WLANPI_CORE_URL="http://localhost:31415",
+        WLANPI_CORE_URL="https://localhost:31415",
         _env_file=None,
     )
 

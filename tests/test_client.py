@@ -7,7 +7,7 @@ from wlanpi_mcp.client.core_client import CoreClient
 
 @respx.mock
 async def test_get_passes_client_token_through(client, bearer_token):
-    route = respx.get("http://localhost:31415/api/v1/system/device/info").mock(
+    route = respx.get("https://localhost:31415/api/v1/system/device/info").mock(
         return_value=httpx.Response(200, json={"ok": True})
     )
     await client.get("/api/v1/system/device/info")
@@ -17,7 +17,7 @@ async def test_get_passes_client_token_through(client, bearer_token):
 
 @respx.mock
 async def test_tags_requests_for_nginx_jwt_routing(client):
-    route = respx.get("http://localhost:31415/api/v1/system/device/info").mock(
+    route = respx.get("https://localhost:31415/api/v1/system/device/info").mock(
         return_value=httpx.Response(200, json={"ok": True})
     )
     await client.get("/api/v1/system/device/info")
@@ -26,7 +26,7 @@ async def test_tags_requests_for_nginx_jwt_routing(client):
 
 @respx.mock
 async def test_raises_on_404(client):
-    respx.get("http://localhost:31415/api/v1/not/found").mock(
+    respx.get("https://localhost:31415/api/v1/not/found").mock(
         return_value=httpx.Response(404, json={"detail": "not found"})
     )
     with pytest.raises(httpx.HTTPStatusError):
@@ -37,7 +37,7 @@ async def test_raises_on_404(client):
 async def test_401_propagates(client):
     # The client doesn't own the token, so an invalid/expired token is the
     # MCP client's problem — wlanpi-core's 401 must surface, not be retried.
-    route = respx.get("http://localhost:31415/api/v1/system/device/info").mock(
+    route = respx.get("https://localhost:31415/api/v1/system/device/info").mock(
         return_value=httpx.Response(401, json={"detail": "unauthorized"})
     )
     with pytest.raises(httpx.HTTPStatusError) as exc_info:
@@ -56,7 +56,7 @@ async def test_missing_token_raises(settings):
 async def test_stdio_fallback_uses_configured_token(settings):
     settings.WLANPI_CORE_TOKEN = "stdio.jwt.token"
     client = CoreClient(settings)
-    route = respx.get("http://localhost:31415/api/v1/system/device/info").mock(
+    route = respx.get("https://localhost:31415/api/v1/system/device/info").mock(
         return_value=httpx.Response(200, json={"ok": True})
     )
     await client.get("/api/v1/system/device/info")

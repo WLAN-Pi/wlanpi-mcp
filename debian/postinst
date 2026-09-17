@@ -13,7 +13,8 @@ case "$1" in
         # SSE clients send a wlanpi-core token as 'Authorization: Bearer'.
         if [ ! -f "$CONFIG_FILE" ]; then
             cat > "$CONFIG_FILE" <<EOF
-WLANPI_CORE_URL=http://localhost:31415
+WLANPI_CORE_URL=https://localhost:31415
+WLANPI_CORE_CA=/etc/nginx/ssl/self-signed-wlanpi.cert
 # Fallback wlanpi-core JWT for stdio transport only. In SSE/daemon mode leave
 # empty: clients must send their own token as 'Authorization: Bearer <token>'.
 WLANPI_CORE_TOKEN=
@@ -27,9 +28,16 @@ EOF
             echo "============================================================"
             echo "  WLAN Pi MCP Server installed (SSE on port 8766)"
             echo "  Clients authenticate with a wlanpi-core JWT:"
-            echo "  POST http://<device>:31415/api/v1/auth/token"
+            echo "  POST https://<device>:31415/api/v1/auth/token"
             echo "============================================================"
             echo ""
+        else
+            # Upgrade: migrate HTTP default URL to HTTPS if still at the old value.
+            sed -i 's|^WLANPI_CORE_URL=http://localhost:31415$|WLANPI_CORE_URL=https://localhost:31415|' "$CONFIG_FILE"
+            # Add WLANPI_CORE_CA if not already present.
+            if ! grep -q '^WLANPI_CORE_CA=' "$CONFIG_FILE"; then
+                echo 'WLANPI_CORE_CA=/etc/nginx/ssl/self-signed-wlanpi.cert' >> "$CONFIG_FILE"
+            fi
         fi
 
         chmod 640 "$CONFIG_FILE"

@@ -1,4 +1,5 @@
 import logging
+import ssl
 from typing import Any, Optional
 
 import httpx
@@ -43,8 +44,10 @@ class CoreClient:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        ssl_ctx = ssl.create_default_context(cafile=settings.WLANPI_CORE_CA)
         self._http = httpx.AsyncClient(
             base_url=settings.WLANPI_CORE_URL,
+            verify=ssl_ctx,
             timeout=30.0,
         )
 

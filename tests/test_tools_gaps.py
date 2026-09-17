@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 import respx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP
 
 
 def _register(module):
@@ -99,7 +99,7 @@ async def test_hotspot_clients_omits_iface_when_not_given():
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_routing_table(client):
-    respx.get("http://localhost:31415/api/v1/network/routing").mock(
+    respx.get("https://localhost:31415/api/v1/network/routing").mock(
         return_value=httpx.Response(200, json={"routes": [{"dst": "default", "dev": "eth0"}]})
     )
     result = await client.get("/api/v1/network/routing")
@@ -109,7 +109,7 @@ async def test_get_routing_table(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_dhcp_leases(client):
-    respx.get("http://localhost:31415/api/v1/network/dhcp/leases").mock(
+    respx.get("https://localhost:31415/api/v1/network/dhcp/leases").mock(
         return_value=httpx.Response(200, json={"leases": []})
     )
     result = await client.get("/api/v1/network/dhcp/leases")
@@ -141,7 +141,7 @@ async def test_renew_dhcp_lease_uses_path_param():
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_wifi_capabilities(client):
-    respx.get("http://localhost:31415/api/v1/wifi/capabilities").mock(
+    respx.get("https://localhost:31415/api/v1/wifi/capabilities").mock(
         return_value=httpx.Response(200, json={"phys": [{"phy": "phy0"}]})
     )
     result = await client.get("/api/v1/wifi/capabilities")
@@ -187,7 +187,7 @@ async def test_start_blinker_defaults_to_eth0():
 @respx.mock
 @pytest.mark.asyncio
 async def test_start_bluetooth_pairing(client):
-    respx.post("http://localhost:31415/api/v1/bluetooth/pair").mock(
+    respx.post("https://localhost:31415/api/v1/bluetooth/pair").mock(
         return_value=httpx.Response(200, json={"status": "pairing"})
     )
     result = await client.post("/api/v1/bluetooth/pair")

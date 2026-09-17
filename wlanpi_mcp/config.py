@@ -30,7 +30,8 @@ ALLOWED_SERVICES = [
 
 
 class Settings(BaseSettings):
-    WLANPI_CORE_URL: str = "http://localhost:31415"
+    WLANPI_CORE_URL: str = "https://localhost:31415"
+    WLANPI_CORE_CA: str = "/etc/nginx/ssl/self-signed-wlanpi.cert"
     # Fallback wlanpi-core JWT for stdio transport, where there is no HTTP
     # Authorization header to pass through. Leave empty in SSE/daemon mode.
     WLANPI_CORE_TOKEN: str = ""
