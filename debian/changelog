@@ -1,3 +1,17 @@
+wlanpi-mcp (0.6.8-1) unstable; urgency=medium
+
+  * Security: front the SSE daemon with nginx so the wlanpi-core JWT no longer
+    crosses the LAN in cleartext. The uvicorn daemon now binds loopback-only
+    (WLANPI_MCP_HOST=127.0.0.1, WLANPI_MCP_PORT=8767) and an MCP-owned nginx
+    site terminates TLS on 8766 with the device's self-signed cert; clients
+    connect to https://<wlanpi>:8766/sse, same port, scheme only. /sse and
+    /messages/?session_id=... map 1:1, so no root_path handling is needed. The
+    upgrade postinst migrates existing config to the loopback bind and reloads
+    nginx; UFW keeps opening 8766/tcp. postrm removes the site conf.
+  * Fix stale WLANPI_CORE_URL=http://localhost:31415 in config.env.example
+    (the https default was already the code/config default).
+
+ -- Josh Schmelzle <josh@joshschmelzle.com>  Thu, 17 Sep 2026 14:30:00 -0400
 wlanpi-mcp (0.6.7-1) unstable; urgency=medium
 
   * Migrate style/lint/format tooling from flake8 (14 plugins), autoflake,

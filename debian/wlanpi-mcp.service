@@ -1,7 +1,7 @@
 [Unit]
 Description=WLAN Pi MCP Server
-Wants=wlanpi-core.service
-After=network.target wlanpi-core.service
+Wants=wlanpi-core.service nginx.service
+After=network.target wlanpi-core.service nginx.service
 
 [Service]
 Type=simple

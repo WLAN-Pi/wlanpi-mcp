@@ -2,13 +2,13 @@
 
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that exposes [WLAN Pi](https://wlanpi.com) capabilities - device info, service management, Wi-Fi scanning, profiler control, Bluetooth, and VLANs - to AI assistants like Claude.
 
-It is a thin bridge to the `wlanpi-core` REST API on the device (`http://localhost:31415`); every tool call goes through that API.
+It is a thin bridge to the `wlanpi-core` REST API on the device (`https://localhost:31415`); every tool call goes through that API.
 
 ## How it runs
 
 Two transports:
 
-- **SSE (daemon mode)** - how the Debian package runs it under systemd: an HTTP server on port `8766` that remote MCP clients connect to at `http://<wlanpi>:8766/sse`. Every connection **must** present a wlanpi-core JWT (see [Authentication](#authentication)).
+- **SSE (daemon mode)** - how the Debian package runs it under systemd: the uvicorn daemon binds loopback-only and an nginx site fronts it with the device's self-signed TLS on port `8766`. Remote MCP clients connect to `https://<wlanpi>:8766/sse`. Every connection **must** present a wlanpi-core JWT (see [Authentication](#authentication)).
 - **stdio** - the MCP client launches the server as a subprocess. Only useful when the client runs on the WLAN Pi itself.
 
 ## Installation on the WLAN Pi
@@ -19,7 +19,7 @@ Install the Debian package (depends on `wlanpi-core`):
 sudo apt install ./wlanpi-mcp_*.deb
 ```
 
-This installs to `/opt/wlanpi-mcp`, enables the `wlanpi-mcp` systemd service (SSE mode on port 8766), and reads configuration from `/etc/wlanpi-mcp/config.env` (see `install/etc/wlanpi-mcp/config.env.example`).
+This installs to `/opt/wlanpi-mcp`, enables the `wlanpi-mcp` systemd service (SSE mode, fronted by nginx over TLS on port 8766), and reads configuration from `/etc/wlanpi-mcp/config.env` (see `install/etc/wlanpi-mcp/config.env.example`).
 
 To build the package from source: `dpkg-buildpackage -us -uc`.
 
@@ -48,7 +48,7 @@ It prints the token response:
 
 Use the `access_token` value as your Bearer token in the client configs below. Tokens expire (7 days by default in wlanpi-core) - when tool calls start failing with 401, generate a fresh token and update your client config.
 
-Alternatively, call `POST /api/v1/auth/token` yourself - see the wlanpi-core API docs (Swagger UI at `http://<wlanpi>:31415/docs`) for the HMAC signing details.
+Alternatively, call `POST /api/v1/auth/token` yourself - see the wlanpi-core API docs (Swagger UI at `https://<wlanpi>:31415/docs`) for the HMAC signing details.
 
 The full flow, including the nginx `X-Real-IP` handling that makes on-box calls take core's JWT validation path, is documented in [docs/auth-flow.md](docs/auth-flow.md).
 
@@ -57,7 +57,7 @@ The full flow, including the nginx `X-Real-IP` handling that makes on-box calls 
 On any machine that can reach the WLAN Pi:
 
 ```bash
-claude mcp add --transport sse wlanpi http://<wlanpi-ip>:8766/sse \
+claude mcp add --transport sse wlanpi https://<wlanpi-ip>:8766/sse \
   --header "Authorization: Bearer <your-wlanpi-core-jwt>"
 ```
 
@@ -93,9 +93,8 @@ Edit your Claude Desktop config file:
       "command": "npx",
       "args": [
         "-y", "mcp-remote",
-        "http://<wlanpi-ip>:8766/sse",
+        "https://<wlanpi-ip>:8766/sse",
         "--transport", "sse-only",
-        "--allow-http",
         "--header", "Authorization: Bearer ${WLANPI_TOKEN}"
       ],
       "env": {
@@ -108,7 +107,7 @@ Edit your Claude Desktop config file:
 
 Notes:
 
-- `--allow-http` is required because the server is plain HTTP on your LAN. Only do this on a network you trust - the token travels in cleartext.
+- The SSE endpoint uses the same self-signed certificate as wlanpi-core, so your client must trust it (`/etc/nginx/ssl/self-signed-wlanpi.cert` on the device), or accept the cert warning. The JWT is encrypted in transit, not cleartext.
 - `--transport sse-only` skips mcp-remote's streamable-HTTP probe; this server speaks SSE.
 - The token is passed via the `env` block and interpolated into the header (`${WLANPI_TOKEN}`) - this sidesteps a known mcp-remote issue with spaces in `args` values on some platforms.
 
@@ -120,10 +119,11 @@ Settings load from the environment or `/etc/wlanpi-mcp/config.env`:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `WLANPI_CORE_URL` | `http://localhost:31415` | wlanpi-core API base URL |
+| `WLANPI_CORE_URL` | `https://localhost:31415` | wlanpi-core API base URL |
+| `WLANPI_CORE_CA` | `/etc/nginx/ssl/self-signed-wlanpi.cert` | CA bundle for verifying wlanpi-core's TLS listener |
 | `WLANPI_CORE_TOKEN` | *(empty)* | Fallback JWT for **stdio mode only**; leave empty in SSE mode |
-| `WLANPI_MCP_HOST` | `0.0.0.0` | SSE bind host |
-| `WLANPI_MCP_PORT` | `8766` | SSE bind port |
+| `WLANPI_MCP_HOST` | `127.0.0.1` | SSE bind host (loopback-only; nginx fronts the public 8766) |
+| `WLANPI_MCP_PORT` | `8767` | SSE bind port (loopback-only upstream) |
 | `ALLOW_POWER_CONTROL` | `true` | Set `false` to disable the `reboot_device`/`shutdown_device` tools |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
@@ -145,7 +145,7 @@ Requires Python ≥ 3.13.
 pip install -e ".[testing]"
 pytest                                    # run tests
 python -m wlanpi_mcp --transport stdio    # run locally (stdio)
-python -m wlanpi_mcp --transport sse      # run locally (SSE on :8766)
+python -m wlanpi_mcp --transport sse      # run locally (SSE on 127.0.0.1:8767; front with nginx for TLS)
 ```
 
 ## License
