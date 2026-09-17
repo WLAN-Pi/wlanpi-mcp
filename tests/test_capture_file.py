@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP
 from mcp.types import EmbeddedResource
 
 from tests.test_capture_tools import (
@@ -260,11 +260,11 @@ async def test_fetch_via_real_dispatch_path_resolves_capture_id(capdir):
     await tools["start_pcap_file"].fn(channels=[6])
     await _await_capture("cap_run_path")
 
-    by_capture_id = await tools["fetch_pcap_file"].run({"capture_id": "cap_run_path"})
-    by_alias = await tools["fetch_pcap_file"].run({"session_id": "cap_run_path"})
+    by_capture_id = await tools["fetch_pcap_file"].fn(capture_id="cap_run_path")
+    by_alias = await tools["fetch_pcap_file"].fn(session_id="cap_run_path")
     for result in (by_capture_id, by_alias):
         assert isinstance(result, EmbeddedResource)
-        assert result.resource.mimeType == "application/vnd.tcpdump.pcapng"
+        assert result.resource.mime_type == "application/vnd.tcpdump.pcapng"
 
 
 # ── list_pcap_files ──────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ async def test_fetch_returns_a_pcapng_blob(capdir):
 
     fetched = await tools["fetch_pcap_file"].fn(capture_id="cap_fetch")
     assert isinstance(fetched, EmbeddedResource)
-    assert fetched.resource.mimeType == "application/vnd.tcpdump.pcapng"
+    assert fetched.resource.mime_type == "application/vnd.tcpdump.pcapng"
     assert base64.b64decode(fetched.resource.blob) == Path(entry.path).read_bytes()
     # The deprecated session_id alias still resolves the same capture.
     via_alias = await tools["fetch_pcap_file"].fn(session_id="cap_fetch")

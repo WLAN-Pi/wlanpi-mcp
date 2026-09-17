@@ -3,7 +3,7 @@
 ## Context / why
 
 wlanpi-mcp is built on the FastMCP that ships **inside the official MCP SDK**
-(`mcp[cli]`, imported as `from mcp.server.fastmcp import FastMCP`). That bundled
+(`mcp[cli]`, imported as `from mcp.server.mcpserver import MCPServer as FastMCP`). That bundled
 FastMCP is the v1-lineage API and is now effectively in maintenance — active
 FastMCP development happens in the standalone **PrefectHQ/fastmcp** package,
 which reached **v3.0.0 (stable)**. Moving to standalone fastmcp v3 buys the
@@ -36,7 +36,7 @@ middleware security property must be re-established.
 
 ## Current surface (measured)
 
-- `from mcp.server.fastmcp import FastMCP` in **27 files** (all `tools/`,
+- `from mcp.server.mcpserver import MCPServer as FastMCP` in **27 files** (all `tools/`,
   `resources/`, `prompts/`, `server.py`, `__main__.py`, `middleware/`, and 5
   test files). `FastMCP` appears 61× — almost all are `mcp: FastMCP` type hints
   on `register(mcp, client)` and `@mcp.tool()` / `@mcp.resource()` decorators,
@@ -63,7 +63,7 @@ the deployment or client `mcp.json` changes.
    Keep `uvicorn`/`starlette` (still used for the SSE ASGI app + middleware).
    Confirm `mcp` arrives transitively (for the `mcp.server.auth`/`mcp.types`
    imports) — pin `mcp` explicitly if fastmcp's range is looser than we want.
-2. **Import rewrite (27 files)** — `from mcp.server.fastmcp import FastMCP` →
+2. **Import rewrite (27 files)** — `from mcp.server.mcpserver import MCPServer as FastMCP` →
    `from fastmcp import FastMCP`. Purely mechanical; the `@mcp.tool()` /
    `@mcp.resource()` / `@mcp.prompt()` decorators and `register(mcp, client)`
    signatures are unchanged. A single `sed` across the tree plus a review pass.

@@ -11,7 +11,7 @@ closes the socket before returning, so no ownerless capture is left running.
 import logging
 from typing import Any, List, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP
 
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.dot11 import (

@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP
 from mcp.types import BlobResourceContents, EmbeddedResource
 
 from wlanpi_mcp.capture import storage
@@ -477,7 +477,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             type="resource",
             resource=BlobResourceContents(
                 uri=f"file://{resolved}",
-                mimeType=PCAP_MIME,
+                mime_type=PCAP_MIME,
                 blob=blob,
             ),
         )
