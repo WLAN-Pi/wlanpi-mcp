@@ -1,33 +1,38 @@
-from typing import Optional
+"""MCP tools for controlling the wlanpi-profiler."""
+
+from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the profiler control tools."""
 
     @mcp.tool()
-    async def get_profiler_status() -> dict:
+    async def get_profiler_status() -> dict[str, Any]:
         """
         Get the current status of the wlanpi-profiler.
-        Returns whether the profiler is running, its SSID, channel, and interface.
+
+        Returns whether the profiler is running, its SSID, channel, and
+        interface.
         """
         return await client.get("/api/v1/profiler/status")
 
     @mcp.tool()
     async def start_profiler(
-        interface: Optional[str] = None,
-        channel: Optional[int] = None,
-        frequency: Optional[int] = None,
-        ssid: Optional[str] = None,
-        no11r: Optional[bool] = None,
-        no11ax: Optional[bool] = None,
-        no11be: Optional[bool] = None,
-        wpa3_personal: Optional[bool] = None,
-        wpa3_personal_transition: Optional[bool] = None,
-        noAP: Optional[bool] = None,
-        debug: Optional[bool] = None,
-    ) -> dict:
+        interface: str | None = None,
+        channel: int | None = None,
+        frequency: int | None = None,
+        ssid: str | None = None,
+        no11r: bool | None = None,
+        no11ax: bool | None = None,
+        no11be: bool | None = None,
+        wpa3_personal: bool | None = None,
+        wpa3_personal_transition: bool | None = None,
+        noAP: bool | None = None,
+        debug: bool | None = None,
+    ) -> dict[str, Any]:
         """
         Start the wlanpi-profiler to capture 802.11 client capability information.
 
@@ -47,7 +52,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             noAP: Run without bringing up an AP (passive capture only)
             debug: Enable debug logging in profiler
         """
-        body = {}
+        body: dict[str, Any] = {}
         if interface is not None:
             body["interface"] = interface
         if channel is not None:
@@ -74,8 +79,6 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.post("/api/v1/profiler/start", json=body)
 
     @mcp.tool()
-    async def stop_profiler() -> dict:
-        """
-        Stop the wlanpi-profiler and return summary results.
-        """
+    async def stop_profiler() -> dict[str, Any]:
+        """Stop the wlanpi-profiler and return summary results."""
         return await client.post("/api/v1/profiler/stop")

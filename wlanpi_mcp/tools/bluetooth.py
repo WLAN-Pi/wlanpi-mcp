@@ -1,21 +1,26 @@
-from typing import Literal
+"""MCP tools for Bluetooth status, power, and pairing."""
+
+from typing import Any, Literal
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the Bluetooth control tools."""
 
     @mcp.tool()
-    async def get_bluetooth_status() -> dict:
+    async def get_bluetooth_status() -> dict[str, Any]:
         """
-        Get Bluetooth adapter status including name, address, power state,
-        and list of paired devices.
+        Get Bluetooth adapter status.
+
+        Includes the adapter name, address, power state, and list of paired
+        devices.
         """
         return await client.get("/api/v1/bluetooth/status")
 
     @mcp.tool()
-    async def set_bluetooth_power(action: Literal["on", "off"]) -> dict:
+    async def set_bluetooth_power(action: Literal["on", "off"]) -> dict[str, Any]:
         """
         Turn Bluetooth on or off.
 
@@ -25,9 +30,10 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.post(f"/api/v1/bluetooth/power/{action}")
 
     @mcp.tool()
-    async def start_bluetooth_pairing() -> dict:
+    async def start_bluetooth_pairing() -> dict[str, Any]:
         """
-        Put the WLAN Pi into Bluetooth discoverable pairing mode (starts bt-timedpair)
-        so a phone or laptop can pair with it.
+        Put the WLAN Pi into Bluetooth discoverable pairing mode.
+
+        Starts bt-timedpair so a phone or laptop can pair with it.
         """
         return await client.post("/api/v1/bluetooth/pair")

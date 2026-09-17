@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 import respx
+
 from wlanpi_mcp._compat import FastMCP
 
 
@@ -18,6 +19,7 @@ def _register(module):
 
 
 # ── System ───────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_restart_service_blocked_for_unknown_service():
@@ -96,11 +98,14 @@ async def test_hotspot_clients_omits_iface_when_not_given():
 
 # ── Network diagnostics ──────────────────────────────────────────────────────
 
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_routing_table(client):
     respx.get("https://localhost:31415/api/v1/network/routing").mock(
-        return_value=httpx.Response(200, json={"routes": [{"dst": "default", "dev": "eth0"}]})
+        return_value=httpx.Response(
+            200, json={"routes": [{"dst": "default", "dev": "eth0"}]}
+        )
     )
     result = await client.get("/api/v1/network/routing")
     assert "routes" in result
@@ -138,6 +143,7 @@ async def test_renew_dhcp_lease_uses_path_param():
 
 # ── WiFi ─────────────────────────────────────────────────────────────────────
 
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_wifi_capabilities(client):
@@ -161,6 +167,7 @@ async def test_hotspot_stations_passes_iface():
 
 # ── Utils ────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_speedtest_uses_long_timeout():
     from wlanpi_mcp.tools import utils
@@ -183,6 +190,7 @@ async def test_start_blinker_defaults_to_eth0():
 
 
 # ── Bluetooth ────────────────────────────────────────────────────────────────
+
 
 @respx.mock
 @pytest.mark.asyncio

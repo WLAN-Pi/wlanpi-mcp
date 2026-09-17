@@ -1,15 +1,14 @@
 """Tests for the capture tools that drive the wlanpi-core capture WebSocket."""
 
-import asyncio
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from wlanpi_mcp._compat import FastMCP
 
 from tests.test_capture_dot11 import beacon, radiotap
 from tests.test_capture_pcapng import epb, idb, shb
+from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import CaptureSocket
 from wlanpi_mcp.client.core_client import CoreClient
@@ -236,7 +235,7 @@ async def test_owner_flow_returns_dissected_aps_and_stops_the_capture(ws):
         CHANNEL_SET,
         # The capture is still running when the window elapses (a quiet recv
         # that times out, like the real duration deadline), not a self-report.
-        asyncio.TimeoutError(),
+        TimeoutError(),
     ]
     tools, _ = _register()
     result = await tools["capture_scan"].fn(

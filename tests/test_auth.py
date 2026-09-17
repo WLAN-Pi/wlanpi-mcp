@@ -3,7 +3,10 @@ import uuid
 
 import httpx
 import pytest
-from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser, authorization_context
+from mcp.server.auth.middleware.bearer_auth import (
+    AuthenticatedUser,
+    authorization_context,
+)
 from mcp.server.sse import SseServerTransport
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -124,7 +127,10 @@ async def test_sse_session_rejects_mismatched_token():
 
     # Token A (the opener) is accepted and its message is delivered.
     status_a = await _post_message(
-        transport, session_id, _principal("token-A"), body=b'{"jsonrpc":"2.0","id":1,"method":"ping"}'
+        transport,
+        session_id,
+        _principal("token-A"),
+        body=b'{"jsonrpc":"2.0","id":1,"method":"ping"}',
     )
     assert status_a == 202
     assert len(received) == 1

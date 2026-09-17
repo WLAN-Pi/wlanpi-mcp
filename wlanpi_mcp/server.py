@@ -1,13 +1,14 @@
+"""Assemble the WLAN Pi MCP server and register all tools, resources, and prompts."""
+
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.prompts import diagnostics
 from wlanpi_mcp.resources import bluetooth as bt_res
-from wlanpi_mcp.resources import device
+from wlanpi_mcp.resources import device, services
 from wlanpi_mcp.resources import mode as mode_res
 from wlanpi_mcp.resources import netconfig as netconfig_res
 from wlanpi_mcp.resources import network as net_res
 from wlanpi_mcp.resources import profiler as profiler_res
-from wlanpi_mcp.resources import services
 from wlanpi_mcp.tools import (
     advanced,
     bluetooth,
@@ -27,6 +28,7 @@ from wlanpi_mcp.tools import (
 def create_server(
     client: CoreClient, host: str = "0.0.0.0", port: int = 8766
 ) -> FastMCP:
+    """Create a WLAN Pi MCP server with all tools, resources, and prompts registered."""
     mcp = FastMCP(
         "WLAN Pi",
         instructions=(

@@ -1,16 +1,19 @@
-from typing import Optional
+"""MCP tools for managing VLANs on ethernet interfaces."""
+
+from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the VLAN management tools."""
 
     @mcp.tool()
     async def get_vlans(
-        interface: Optional[str] = None,
-        vlan_id: Optional[int] = None,
-    ) -> dict:
+        interface: str | None = None,
+        vlan_id: int | None = None,
+    ) -> dict[str, Any]:
         """
         Get VLAN interfaces on the WLAN Pi.
 
@@ -29,14 +32,14 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     async def create_vlan(
         interface: str,
         vlan_id: int,
-        addresses: Optional[list[dict]] = None,
-    ) -> dict:
+        addresses: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """
         Create (or replace) a VLAN on an ethernet interface.
 
         Args:
             interface: Ethernet interface (e.g. 'eth0'). Cannot be 'all'.
-            vlan_id: VLAN ID (1–4094)
+            vlan_id: VLAN ID (1-4094)
             addresses: Optional list of IP addresses to assign, each a dict with
                        'family' (4 or 6), 'local' (IP string), and 'prefixlen' (int).
                        Example: [{"family": 4, "local": "192.168.10.1", "prefixlen": 24}]
@@ -52,7 +55,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         interface: str,
         vlan_id: int,
         allow_missing: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Delete a VLAN from an ethernet interface.
 

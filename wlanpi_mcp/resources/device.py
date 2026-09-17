@@ -1,3 +1,5 @@
+"""MCP resources for device identity and system metrics."""
+
 import time
 from typing import Any
 
@@ -19,6 +21,7 @@ async def _cached_get(client: CoreClient, path: str, ttl: float) -> Any:
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the device info and stats resources."""
 
     @mcp.resource("device://info")
     async def device_info() -> str:

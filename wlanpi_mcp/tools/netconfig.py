@@ -1,26 +1,30 @@
+"""MCP tools for managing saved network configuration profiles."""
+
+from typing import Any
+
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the network configuration management tools."""
 
     @mcp.tool()
-    async def get_network_config_status() -> dict:
-        """
-        Get the status of all saved network configurations, showing which is active.
-        """
+    async def get_network_config_status() -> dict[str, Any]:
+        """Get the status of all saved network configurations, showing which is active."""
         return await client.get("/api/v1/network/config/status")
 
     @mcp.tool()
-    async def list_network_configs() -> dict:
+    async def list_network_configs() -> dict[str, Any]:
         """
-        List all saved network configuration profiles and whether each is active.
+        List all saved network configuration profiles.
+
         Returns a dict mapping config ID to active state (True/False).
         """
         return await client.get("/api/v1/network/config/")
 
     @mcp.tool()
-    async def get_network_config(id: str) -> dict:
+    async def get_network_config(id: str) -> dict[str, Any]:
         """
         Get the full details of a saved network configuration by ID.
 
@@ -30,7 +34,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get(f"/api/v1/network/config/{id}")
 
     @mcp.tool()
-    async def create_network_config(config: dict) -> dict:
+    async def create_network_config(config: dict[str, Any]) -> dict[str, Any]:
         """
         Create a new saved network configuration profile.
 
@@ -53,7 +57,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.post("/api/v1/network/config/", json=config)
 
     @mcp.tool()
-    async def update_network_config(id: str, config_update: dict) -> dict:
+    async def update_network_config(
+        id: str, config_update: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Update an existing network configuration profile.
 
@@ -68,7 +74,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.patch(f"/api/v1/network/config/{id}", json=config_update)
 
     @mcp.tool()
-    async def activate_network_config(id: str, override_active: bool = False) -> dict:
+    async def activate_network_config(
+        id: str, override_active: bool = False
+    ) -> dict[str, Any]:
         """
         Activate a saved network configuration profile.
 
@@ -82,7 +90,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         )
 
     @mcp.tool()
-    async def deactivate_network_config(id: str, override_active: bool = False) -> dict:
+    async def deactivate_network_config(
+        id: str, override_active: bool = False
+    ) -> dict[str, Any]:
         """
         Deactivate a currently active network configuration profile.
 
@@ -96,7 +106,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         )
 
     @mcp.tool()
-    async def delete_network_config(id: str, force: bool = False) -> dict:
+    async def delete_network_config(id: str, force: bool = False) -> dict[str, Any]:
         """
         Delete a saved network configuration profile.
 

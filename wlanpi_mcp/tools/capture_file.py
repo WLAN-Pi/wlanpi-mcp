@@ -24,9 +24,10 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcp.types import BlobResourceContents, EmbeddedResource
+from pydantic import AnyUrl
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
@@ -63,15 +64,16 @@ class FileCapture:
     duration_s: int
     started_at: float
     stop_event: asyncio.Event
-    config: Optional[dict] = None
-    task: Optional[asyncio.Task] = None
+    config: dict[str, Any] | None = None
+    task: asyncio.Task[Any] | None = None
     status: str = "running"  # running | completed | stopped | error | cancelled
     bytes_written: int = 0
-    error: Optional[str] = None
-    ended_at: Optional[float] = None
-    channel_issues: List[dict] = field(default_factory=list)
+    error: str | None = None
+    ended_at: float | None = None
+    channel_issues: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_result(self) -> dict:
+    def to_result(self) -> dict[str, Any]:
+        """Return the capture's public state as a JSON-safe result dict."""
         out = {
             # capture_id is the handle callers pass back to fetch/stop. It is
             # core's session id, but not named 'session_id' on purpose: that
@@ -101,7 +103,7 @@ class FileCapture:
 #: Live file captures, keyed by core session_id. Persists across tool calls for
 #: the life of the server process (the whole point: the capture outlives the
 #: start call).
-_CAPTURES: Dict[str, FileCapture] = {}
+_CAPTURES: dict[str, FileCapture] = {}
 
 
 def _safe_size(path: str) -> int:
@@ -117,9 +119,13 @@ _capture_dir = storage.capture_dir
 _within_capture_dir = storage.within_capture_dir
 
 
-def _resolve_session_path(session_id: str) -> Optional[str]:
-    """Path for a capture id, from the registry first, then from disk — so a
-    fetch by capture id still works when the registry has forgotten it."""
+def _resolve_session_path(session_id: str) -> str | None:
+    """
+    Return the file path for a capture id.
+
+    Looks in the registry first, then on disk, so a fetch by capture id still
+    works when the registry has forgotten it.
+    """
     entry = _CAPTURES.get(session_id)
     if entry is not None:
         return entry.path
@@ -130,7 +136,7 @@ def _resolve_session_path(session_id: str) -> Optional[str]:
     return matches[-1] if matches else None
 
 
-def _disk_captures() -> List[dict]:
+def _disk_captures() -> list[dict[str, Any]]:
     """Capture files present on disk but not (any longer) in the registry."""
     known = {os.path.realpath(e.path) for e in _CAPTURES.values()}
     try:
@@ -176,7 +182,7 @@ async def _run_file_capture(
     except asyncio.CancelledError:
         entry.status = "cancelled"
         raise
-    except Exception as exc:  # noqa: BLE001 - background task must not crash out
+    except Exception as exc:
         entry.status = "error"
         entry.error = f"{type(exc).__name__}: {exc}"
         log.exception("file capture %s failed", entry.session_id)
@@ -196,19 +202,19 @@ async def _run_file_capture(
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the non-streaming, file-backed capture tools."""
 
     @mcp.tool()
     async def start_pcap_file(
         interface: str = DEFAULT_INTERFACE,
-        channels: Optional[List[int]] = None,
+        channels: list[int] | None = None,
         width: int = 20,
         dwell_ms: int = 250,
         duration_s: int = 60,
         pcap_filter: str = "",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
-        Start a background, non-streaming packet capture that writes a pcapng
-        file on the WLAN Pi.
+        Start a background, non-streaming packet capture to a pcapng file.
 
         This is the non-streaming counterpart to capture_scan: unlike that
         streaming tool, it does not block and does not return a dissected
@@ -233,7 +239,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                 given as explicit frequencies in MHz. Omit to hop every channel
                 the adapter supports.
             width: Channel width in MHz: 20, 40, 80 or 160.
-            dwell_ms: Milliseconds to dwell on each channel (50–60000).
+            dwell_ms: Milliseconds to dwell on each channel (50-60000).
             duration_s: How long the background capture runs, in seconds, from 1
                 up to the server maximum (default max 3600). The call itself
                 returns immediately.
@@ -332,7 +338,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                     )
                 }
             return {"error": str(exc)}
-        except Exception as exc:  # noqa: BLE001 - tools return errors, never raise
+        except Exception as exc:
             log.exception("start_pcap_file failed")
             return {"error": f"capture failed: {type(exc).__name__}: {exc}"}
         finally:
@@ -345,12 +351,11 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool()
     async def stop_pcap_file(
-        capture_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-    ) -> dict:
+        capture_id: str | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
         """
-        Stop a running non-streaming file capture started by start_pcap_file,
-        before its duration elapses.
+        Stop a running non-streaming file capture before its duration elapses.
 
         Signals the background capture to stop, waits for it to flush and close
         its file, and returns the final path, status and size. A capture that
@@ -393,15 +398,15 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return entry.to_result()
 
     @mcp.tool()
-    async def list_pcap_files() -> dict:
+    async def list_pcap_files() -> dict[str, Any]:
         """
-        List the non-streaming, file-backed captures this server has started,
-        running or done.
+        List the non-streaming, file-backed captures this server has started.
 
-        Each entry gives the capture_id, interface, on-device pcapng path,
-        status (running/completed/stopped/error), current size and configured
-        duration. Use stop_pcap_file to end a running one and fetch_pcap_file to
-        retrieve the file. Files left on disk from an earlier server run are
+        Includes captures that are running or done. Each entry gives the
+        capture_id, interface, on-device pcapng path, status
+        (running/completed/stopped/error), current size and configured
+        duration. Use stop_pcap_file to end a running one and fetch_pcap_file
+        to retrieve the file. Files left on disk from an earlier server run are
         also listed, with status 'on_disk' — they can still be fetched.
         """
         captures = [entry.to_result() for entry in _CAPTURES.values()]
@@ -410,19 +415,18 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool()
     async def fetch_pcap_file(
-        capture_id: Optional[str] = None,
-        path: Optional[str] = None,
-        session_id: Optional[str] = None,
-    ):
+        capture_id: str | None = None,
+        path: str | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any] | EmbeddedResource:
         """
-        Fetch a non-streaming capture's pcapng file from the WLAN Pi as a
-        binary blob.
+        Fetch a non-streaming capture's pcapng file as a binary blob.
 
-        Returns the raw pcapng file (mime application/vnd.tcpdump.pcapng) for the
-        capture named by capture_id (preferred) or by an explicit on-device
-        path. Open it in Wireshark/tshark for analysis. Fetch after the capture
-        has stopped for a complete file; fetching a still-running capture
-        returns only the bytes written so far.
+        Returns the raw pcapng file (mime application/vnd.tcpdump.pcapng) for
+        the capture named by capture_id (preferred) or by an explicit
+        on-device path. Open it in Wireshark/tshark for analysis. Fetch after
+        the capture has stopped for a complete file; fetching a still-running
+        capture returns only the bytes written so far.
 
         For safety this reads only files under the server's managed capture
         directory; any other path is refused.
@@ -439,8 +443,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             if resolved_path is None:
                 return {
                     "error": (
-                        f"no capture file for capture_id '{cid}'. See "
-                        "list_pcap_files."
+                        f"no capture file for capture_id '{cid}'. See list_pcap_files."
                     )
                 }
             path = resolved_path
@@ -476,8 +479,8 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return EmbeddedResource(
             type="resource",
             resource=BlobResourceContents(
-                uri=f"file://{resolved}",
-                mime_type=PCAP_MIME,
+                uri=AnyUrl(f"file://{resolved}"),
+                mimeType=PCAP_MIME,
                 blob=blob,
             ),
         )

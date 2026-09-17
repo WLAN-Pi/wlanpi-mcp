@@ -1,4 +1,7 @@
+"""MCP tools for advanced system control: mode, regulatory domain, and battery."""
+
 import re
+from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
@@ -7,26 +10,26 @@ VALID_MODES = {"classic", "wconsole", "hotspot", "wiperf", "server", "bridge"}
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the advanced system control tools."""
 
     @mcp.tool()
-    async def get_device_mode() -> dict:
-        """
-        Get the current WLAN Pi operating mode (classic, wconsole, hotspot, wiperf, server, bridge).
-        """
+    async def get_device_mode() -> dict[str, Any]:
+        """Get the current WLAN Pi operating mode (classic, wconsole, hotspot, wiperf, server, bridge)."""
         info = await client.get("/api/v1/system/device/info")
         mode = info.get("mode", "")
         return {"mode": mode, "valid": mode in VALID_MODES}
 
     @mcp.tool()
-    async def get_regulatory_domain() -> dict:
+    async def get_regulatory_domain() -> dict[str, Any]:
         """
-        Get the current Wi-Fi regulatory domain (country code) set on the WLAN Pi.
+        Get the current Wi-Fi regulatory domain.
+
         Returns 'country' as an ISO 3166-1 alpha-2 code.
         """
         return await client.get("/api/v1/system/reg-domain")
 
     @mcp.tool()
-    async def set_regulatory_domain(country_code: str) -> dict:
+    async def set_regulatory_domain(country_code: str) -> dict[str, Any]:
         """
         Set the Wi-Fi regulatory domain (country code) on the WLAN Pi.
 
@@ -46,7 +49,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         )
 
     @mcp.tool()
-    async def get_battery_status() -> dict:
+    async def get_battery_status() -> dict[str, Any]:
         """
         Get battery status on WLAN Pi models with a battery (e.g. WLAN Pi Pro).
 
