@@ -16,6 +16,8 @@ case "$1" in
         fi
         rm -f /etc/ufw/applications.d/wlanpi-mcp
         rm -f /etc/wlanpi-mcp/installed-rules-version
+        # Remove the nginx TLS front shipped in sites-enabled.
+        rm -f /etc/nginx/sites-enabled/wlanpi-mcp.conf
     ;;
 
     upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
