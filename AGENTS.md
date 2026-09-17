@@ -1,6 +1,6 @@
 # Guidance for coding agents
 
-Read this first. WORKFLOW.md covers setup, building, and releases where present.
+Read this first.
 
 ## Branch and PR rules
 
