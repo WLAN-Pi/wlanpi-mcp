@@ -1,3 +1,13 @@
+wlanpi-mcp (0.6.6-1) unstable; urgency=medium
+
+  * Migrate the wlanpi-core client to HTTPS with CA verification. WLANPI_CORE_URL
+    now defaults to https://localhost:31415 and WLANPI_CORE_CA points at the
+    self-signed certificate, so tool calls work against core's TLS-only 31415
+    listener. The upgrade postinst migrates an existing http:// URL and appends
+    the CA setting.
+
+ -- Josh Schmelzle <josh@joshschmelzle.com>  Thu, 17 Sep 2026 13:30:00 -0400
+
 wlanpi-mcp (0.6.5-1) unstable; urgency=medium
 
   * capture: capture_scan/capture_observe now also save the raw pcapng to the
