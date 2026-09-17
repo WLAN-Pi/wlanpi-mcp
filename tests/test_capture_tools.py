@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from mcp.server.mcpserver import MCPServer as FastMCP
+from wlanpi_mcp._compat import FastMCP
 
 from tests.test_capture_dot11 import beacon, radiotap
 from tests.test_capture_pcapng import epb, idb, shb

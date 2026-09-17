@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 import respx
-from mcp.server.mcpserver import MCPServer as FastMCP
+from wlanpi_mcp._compat import FastMCP
 
 
 def _register(module):

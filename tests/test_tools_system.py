@@ -28,7 +28,7 @@ async def test_get_service_status(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_start_service_blocked_for_unknown_service(client):
-    from mcp.server.mcpserver import MCPServer as FastMCP
+    from wlanpi_mcp._compat import FastMCP
     from wlanpi_mcp.tools import system
 
     mcp = FastMCP("test")

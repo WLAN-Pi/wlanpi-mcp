@@ -12,7 +12,7 @@ from wlanpi_mcp.config import Settings
 async def test_scan_wlan_uses_canonical_endpoint():
     from unittest.mock import AsyncMock, MagicMock
     from wlanpi_mcp.tools.wlan import register
-    from mcp.server.mcpserver import MCPServer as FastMCP
+    from wlanpi_mcp._compat import FastMCP
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"nets": []})
@@ -36,7 +36,7 @@ def test_deprecated_wlan_tools_removed():
     tools (create/activate config, config status)."""
     from unittest.mock import MagicMock
     from wlanpi_mcp.tools.wlan import register
-    from mcp.server.mcpserver import MCPServer as FastMCP
+    from wlanpi_mcp._compat import FastMCP
 
     mcp = FastMCP("test")
     register(mcp, MagicMock())
@@ -101,7 +101,7 @@ async def test_get_profiler_status(client):
 async def test_start_profiler_builds_minimal_body():
     from unittest.mock import AsyncMock, MagicMock
     from wlanpi_mcp.tools.profiler import register
-    from mcp.server.mcpserver import MCPServer as FastMCP
+    from wlanpi_mcp._compat import FastMCP
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"success": True})

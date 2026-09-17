@@ -1,4 +1,4 @@
-from mcp.server.mcpserver import MCPServer as FastMCP
+from wlanpi_mcp._compat import FastMCP
 
 
 def register(mcp: FastMCP) -> None:

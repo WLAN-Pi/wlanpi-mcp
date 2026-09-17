@@ -1,7 +1,6 @@
 from typing import Optional
 
-from mcp.server.mcpserver import MCPServer as FastMCP
-
+from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.config import ALLOWED_SERVICES, get_settings
 

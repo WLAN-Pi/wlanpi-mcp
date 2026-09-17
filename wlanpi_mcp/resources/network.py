@@ -2,8 +2,7 @@ import json
 import time
 from typing import Any
 
-from mcp.server.mcpserver import MCPServer as FastMCP
-
+from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 
 _cache: dict[str, tuple[Any, float]] = {}

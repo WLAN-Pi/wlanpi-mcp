@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from mcp.server.mcpserver import MCPServer as FastMCP
+from wlanpi_mcp._compat import FastMCP
 from mcp.types import EmbeddedResource
 
 from tests.test_capture_tools import (

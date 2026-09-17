@@ -26,9 +26,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from mcp.server.mcpserver import MCPServer as FastMCP
 from mcp.types import BlobResourceContents, EmbeddedResource
 
+from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import (
     CaptureError,
