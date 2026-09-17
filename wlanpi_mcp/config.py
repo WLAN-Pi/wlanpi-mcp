@@ -42,9 +42,12 @@ class Settings(BaseSettings):
     # Gate for the reboot_device/shutdown_device tools. Set false to prevent
     # MCP clients from power-cycling the device.
     ALLOW_POWER_CONTROL: bool = True
-    WLANPI_MCP_HOST: str = "0.0.0.0"
-    # 8766: avoid colliding with the wlanpi-fpms2 state service on 8765
-    WLANPI_MCP_PORT: int = 8766
+    # Loopback-only: nginx fronts the SSE daemon on 8766 with TLS, so the JWT
+    # never crosses the LAN in cleartext.
+    WLANPI_MCP_HOST: str = "127.0.0.1"
+    # 8767: loopback-only upstream for the nginx front on 8766.
+    # Avoids colliding with the wlanpi-fpms2 state service on 8765.
+    WLANPI_MCP_PORT: int = 8767
     LOG_LEVEL: str = "INFO"
     # File-backed capture (start_pcap_file/fetch_pcap_file). Raw pcapng files
     # are written here and fetch refuses any path outside this directory.

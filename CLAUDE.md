@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-An MCP (Model Context Protocol) server that exposes WLAN Pi capabilities - device info, service management, Wi-Fi scanning, packet capture, profiler, Bluetooth, VLANs - to AI assistants. It is a thin bridge to the `wlanpi-core` API on `http://localhost:31415`: every tool and resource goes through that API, and nothing runs local subprocesses or reads local files. Keep it that way - if a capability has no wlanpi-core endpoint, the endpoint gets added upstream first.
+An MCP (Model Context Protocol) server that exposes WLAN Pi capabilities - device info, service management, Wi-Fi scanning, packet capture, profiler, Bluetooth, VLANs - to AI assistants. It is a thin bridge to the `wlanpi-core` API on `https://localhost:31415`: every tool and resource goes through that API, and nothing runs local subprocesses or reads local files. Keep it that way - if a capability has no wlanpi-core endpoint, the endpoint gets added upstream first.
 
 Almost all of that API is REST. The one exception is **packet capture**, which wlanpi-core exposes only as a WebSocket (`/api/v1/streaming/capture`) - so `wlanpi_mcp/capture/` speaks that protocol instead of HTTP. That is still core-API-only: same host, same JWT, still no local subprocess. The one deliberate exception to "no local file" is the file-backed capture family (`tools/capture_file.py`, see below), which persists the pcapng bytes it receives over that same WebSocket to a managed directory and reads them back - a scoped relaxation, not licence to read arbitrary device files or add other non-core transports.
 
