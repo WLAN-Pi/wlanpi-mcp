@@ -9,7 +9,7 @@ closes the socket before returning, so no ownerless capture is left running.
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
@@ -62,9 +62,9 @@ def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
-def _collect_freqs(node: Any) -> List[int]:
+def _collect_freqs(node: Any) -> list[int]:
     """Pull frequencies in MHz out of a supported-frequency payload."""
-    out: List[int] = []
+    out: list[int] = []
 
     def walk(item: Any) -> None:
         if isinstance(item, bool):
@@ -96,7 +96,7 @@ def _collect_freqs(node: Any) -> List[int]:
     return unique
 
 
-def _freqs_by_adapter(data: Any) -> dict:
+def _freqs_by_adapter(data: Any) -> dict[str, list[int]]:
     """
     Normalise SUPPORTED_FREQUENCIES data to {interface: [freq, ...]}.
 
@@ -116,7 +116,7 @@ def _freqs_by_adapter(data: Any) -> dict:
     }
 
 
-def _channels_to_freqs(channels: List[int]) -> List[int]:
+def _channels_to_freqs(channels: list[int]) -> list[int]:
     """Map channel numbers (or explicit MHz values) to frequencies."""
     freqs = []
     for channel in channels:
@@ -125,7 +125,7 @@ def _channels_to_freqs(channels: List[int]) -> List[int]:
     return freqs
 
 
-def _annotate(freqs: List[int]) -> List[dict]:
+def _annotate(freqs: list[int]) -> list[dict[str, Any]]:
     return [{"freq": f, "channel": freq_to_channel(f)} for f in freqs]
 
 
@@ -136,7 +136,7 @@ async def _run_window(
     *,
     owner: bool = False,
     raw_sink: Any = None,
-) -> tuple[ScanTable, dict]:
+) -> tuple[ScanTable, dict[str, Any]]:
     table = ScanTable()
     reader = PcapngReader()
     events = await sock.consume(reader, table, duration_s, frame_log, raw_sink)
@@ -166,12 +166,15 @@ async def _run_and_save(
     capture_id: str,
     *,
     owner: bool,
-) -> tuple[ScanTable, dict, dict]:
-    """Run a capture window while teeing the raw pcapng to a file so the
-    dissected summary can be verified against the frames. Writing is
-    best-effort — a storage problem never breaks the capture — and the file is
-    always closed. Returns ``(table, events, pcap_extra)`` where pcap_extra
-    carries ``pcap_path``/``pcap_bytes`` when the file was written."""
+) -> tuple[ScanTable, dict[str, Any], dict[str, Any]]:
+    """
+    Run a capture window while teeing the raw pcapng to a file.
+
+    The file lets the dissected summary be verified against the frames.
+    Writing is best-effort — a storage problem never breaks the capture — and
+    the file is always closed. Returns ``(table, events, pcap_extra)`` where
+    pcap_extra carries ``pcap_path``/``pcap_bytes`` when the file was written.
+    """
     path, fileobj = storage.try_open_capture_file(capture_id)
     sink = fileobj.write if fileobj is not None else None
     try:
@@ -189,8 +192,12 @@ async def _run_and_save(
 
 
 def _summary(
-    role: str, table: ScanTable, events: dict, frame_log: FrameLog, **extra: Any
-) -> dict:
+    role: str,
+    table: ScanTable,
+    events: dict[str, Any],
+    frame_log: FrameLog,
+    **extra: Any,
+) -> dict[str, Any]:
     aps = table.to_result()
     result = {
         "role": role,
@@ -210,17 +217,18 @@ def _summary(
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the streaming capture tools."""
 
     @mcp.tool()
     async def capture_scan(
         interface: str = DEFAULT_INTERFACE,
-        channels: Optional[List[int]] = None,
+        channels: list[int] | None = None,
         width: int = 20,
         dwell_ms: int = 250,
         duration_s: int = DEFAULT_DURATION_S,
         pcap_filter: str = "",
         max_frames: int = DEFAULT_MAX_FRAMES,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Run a live streaming Wi-Fi packet capture and return what was on the air.
 
@@ -266,8 +274,8 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                 be given as explicit frequencies in MHz. Omit to hop every
                 channel the adapter supports.
             width: Channel width in MHz: 20, 40, 80 or 160.
-            dwell_ms: Milliseconds to dwell on each channel (50–60000).
-            duration_s: How long to capture, 1–60 seconds. The tool call
+            dwell_ms: Milliseconds to dwell on each channel (50-60000).
+            duration_s: How long to capture, 1-60 seconds. The tool call
                 blocks for this whole window.
             pcap_filter: Optional BPF/pcap filter, e.g. 'type mgt subtype beacon'.
             max_frames: Cap on per-frame records returned in 'frames';
@@ -394,7 +402,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             )
         except CaptureError as exc:
             return {"error": str(exc)}
-        except Exception as exc:  # noqa: BLE001 - tools return errors, never raise
+        except Exception as exc:
             log.exception("capture_scan failed")
             return {"error": f"capture failed: {type(exc).__name__}: {exc}"}
         finally:
@@ -406,11 +414,11 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool()
     async def capture_observe(
-        interface: Optional[str] = None,
-        session_id: Optional[str] = None,
+        interface: str | None = None,
+        session_id: str | None = None,
         duration_s: int = DEFAULT_DURATION_S,
         max_frames: int = DEFAULT_MAX_FRAMES,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Watch a streaming capture another application is already running, read-only.
 
@@ -436,7 +444,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             session_id: Session to attach to (from list_capture_sessions).
             interface: Instead of a session id, the monitor-mode capture
                 interface ('wlanpiN', e.g. 'wlanpi0') whose capture to watch.
-            duration_s: How long to listen, 1–60 seconds. The tool call blocks
+            duration_s: How long to listen, 1-60 seconds. The tool call blocks
                 for this whole window.
             max_frames: Cap on per-frame records in 'frames'; the
                 'frame_types' counts are always exact. Set 0 for AP table and
@@ -511,14 +519,14 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             )
         except CaptureError as exc:
             return {"error": str(exc)}
-        except Exception as exc:  # noqa: BLE001 - tools return errors, never raise
+        except Exception as exc:
             log.exception("capture_observe failed")
             return {"error": f"capture failed: {type(exc).__name__}: {exc}"}
         finally:
             await sock.close()
 
     @mcp.tool()
-    async def list_capture_sessions() -> dict:
+    async def list_capture_sessions() -> dict[str, Any]:
         """
         List the packet captures currently running on this WLAN Pi.
 
@@ -544,14 +552,14 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             return {"sessions": sessions, "count": len(sessions)}
         except CaptureError as exc:
             return {"error": str(exc)}
-        except Exception as exc:  # noqa: BLE001 - tools return errors, never raise
+        except Exception as exc:
             log.exception("list_capture_sessions failed")
             return {"error": f"capture failed: {type(exc).__name__}: {exc}"}
         finally:
             await sock.close()
 
     @mcp.tool()
-    async def get_capture_channels() -> dict:
+    async def get_capture_channels() -> dict[str, Any]:
         """
         List the channels each capture adapter on this WLAN Pi can tune to.
 
@@ -588,7 +596,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             }
         except CaptureError as exc:
             return {"error": str(exc)}
-        except Exception as exc:  # noqa: BLE001 - tools return errors, never raise
+        except Exception as exc:
             log.exception("get_capture_channels failed")
             return {"error": f"capture failed: {type(exc).__name__}: {exc}"}
         finally:

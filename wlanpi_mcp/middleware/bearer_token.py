@@ -1,3 +1,5 @@
+"""Starlette middleware requiring a wlanpi-core JWT on every HTTP request."""
+
 import hashlib
 
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
@@ -12,15 +14,15 @@ from wlanpi_mcp.auth.token_context import current_token
 
 def _principal_for(token: str) -> AuthenticatedUser:
     """
-    Represent the connecting token as an ASGI principal keyed by a fingerprint
-    of the token itself.
+    Represent the connecting token as an ASGI principal.
 
-    The MCP SSE transport binds each session to the principal on scope["user"]
-    at connect time and rejects any later POST /messages/ whose principal
-    differs (mcp/server/sse.py). By keying the principal on a SHA-256 of the
-    raw token, that binding rejects any message carrying a different token than
-    the one that opened the session — so one client's session cannot be driven
-    with another client's (or an unauthenticated) credential.
+    The principal is keyed by a fingerprint of the token itself. The MCP SSE
+    transport binds each session to the principal on scope["user"] at connect
+    time and rejects any later POST /messages/ whose principal differs
+    (mcp/server/sse.py). By keying the principal on a SHA-256 of the raw token,
+    that binding rejects any message carrying a different token than the one
+    that opened the session — so one client's session cannot be driven with
+    another client's (or an unauthenticated) credential.
 
     We hash rather than parse the JWT: this middleware never validates tokens
     (that is wlanpi-core's job), and the fingerprint only needs to be stable
@@ -35,12 +37,12 @@ def _principal_for(token: str) -> AuthenticatedUser:
 
 class BearerTokenMiddleware:
     """
-    Requires every HTTP request to carry a wlanpi-core JWT as
-    'Authorization: Bearer <token>' and stashes it in a contextvar so
-    CoreClient can pass it through to wlanpi-core.
+    Require a wlanpi-core JWT on every HTTP request and stash it in a contextvar.
 
-    The token is not validated here — wlanpi-core rejects bad tokens with a
-    401, which propagates back to the MCP client as a tool error.
+    The JWT must arrive as 'Authorization: Bearer <token>' so CoreClient can
+    pass it through to wlanpi-core. The token is not validated here —
+    wlanpi-core rejects bad tokens with a 401, which propagates back to the MCP
+    client as a tool error.
 
     Pure ASGI middleware (not BaseHTTPMiddleware) so the downstream app runs
     in the same task: the contextvar set here is visible to the SSE session
@@ -55,6 +57,7 @@ class BearerTokenMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Require a Bearer token on every HTTP request and stash it in the contextvar."""
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return

@@ -1,3 +1,32 @@
+wlanpi-mcp (0.6.7-1) unstable; urgency=medium
+
+  * Migrate style/lint/format tooling from flake8 (14 plugins), autoflake,
+    black and isort to ruff. ruff check covers the previous plugin set plus
+    pyupgrade modernization and Google-convention docstring rules (D100-D106,
+    D205, D401, D415) via [tool.ruff] in pyproject.toml; ruff format replaces
+    black/isort. tox envs collapse to py313/lint/formatcheck/format and the
+    whitespace scripts are dropped (W291/W293 handle trailing whitespace).
+  * Wire mypy into the lint gate properly: the lint env now installs the
+    package so type checking resolves mcp/httpx/uvicorn instead of reporting
+    import-not-found. Adds mypy.ini with the same strict flags as wlanpi-core
+    and types the previously bare dict/set annotations across the package.
+  * Fix fetch_pcap_file MIME type: BlobResourceContents was given the unknown
+    extra field mime_type (silently dropped by pydantic extra="allow"), so the
+    returned resource carried mimeType=None. Now passes the SDK field mimeType
+    and wraps the uri in AnyUrl.
+  * Simplify the mcp v1/v2 FastMCP compat shim to a direct import; the old
+    self-import always failed and fell through to the same source anyway.
+  * Add missing module/package/class/function docstrings; document Returns:/
+    Args: on MCP-exposed tools, resources and prompts (their docstrings are
+    served verbatim to MCP clients as descriptions).
+  * CI: run tox -e lint and tox -e formatcheck in the existing police
+    workflows (coverage-badge install dropped), pin tox>=4, and lint/format
+    the tests directory. Coverage artifacts (.coverage, coverage.xml,
+    coverage.svg) are no longer committed.
+  * Sync __version__.py to 0.6.7 so the deploy version check passes.
+
+ -- Josh Schmelzle <josh@joshschmelzle.com>  Thu, 17 Sep 2026 14:30:00 -0400
+
 wlanpi-mcp (0.6.6-1) unstable; urgency=medium
 
   * Migrate the wlanpi-core client to HTTPS with CA verification. WLANPI_CORE_URL

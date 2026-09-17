@@ -1,3 +1,5 @@
+"""MCP resource for WLAN Pi systemd service status."""
+
 import json
 
 from wlanpi_mcp._compat import FastMCP
@@ -6,6 +8,7 @@ from wlanpi_mcp.config import ALLOWED_SERVICES
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the service status resource."""
 
     @mcp.resource("services://status/{name}")
     async def service_status(name: str) -> str:

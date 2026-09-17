@@ -53,7 +53,7 @@ def beacon(
     ies: bytes = b"",
     privacy: bool = False,
     subtype: int = 8,
-    rt: bytes = None,
+    rt: bytes | None = None,
     ftype: int = 0,
 ) -> bytes:
     rt = radiotap() if rt is None else rt
@@ -446,7 +446,7 @@ def mgmt_frame(
     addr2: str = "aa:bb:cc:00:00:01",
     addr3: str = "aa:bb:cc:00:00:01",
     body: bytes = b"",
-    rt: bytes = None,
+    rt: bytes | None = None,
 ) -> bytes:
     rt = radiotap() if rt is None else rt
     fc = struct.pack("<H", (subtype << 4) | (0 << 2))

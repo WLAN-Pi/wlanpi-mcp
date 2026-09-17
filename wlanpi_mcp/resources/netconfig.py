@@ -1,3 +1,5 @@
+"""MCP resources for saved network configuration profiles."""
+
 import json
 import time
 from typing import Any
@@ -20,6 +22,7 @@ async def _cached_get(client: CoreClient, path: str, ttl: float) -> Any:
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the network config list and status resources."""
 
     @mcp.resource("netconfig://list")
     async def netconfig_list() -> str:

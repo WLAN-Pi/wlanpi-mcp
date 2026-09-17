@@ -1,3 +1,5 @@
+"""MCP resources for Bluetooth status."""
+
 import json
 import time
 from typing import Any
@@ -20,6 +22,7 @@ async def _cached_get(client: CoreClient, path: str, ttl: float) -> Any:
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the Bluetooth status resource."""
 
     @mcp.resource("bluetooth://status")
     async def bluetooth_status() -> str:

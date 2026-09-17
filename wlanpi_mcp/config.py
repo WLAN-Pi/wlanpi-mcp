@@ -1,3 +1,5 @@
+"""Server configuration via pydantic settings loaded from the config file."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ALLOWED_SERVICES = [
@@ -30,6 +32,8 @@ ALLOWED_SERVICES = [
 
 
 class Settings(BaseSettings):
+    """Pydantic settings for the WLAN Pi MCP server."""
+
     WLANPI_CORE_URL: str = "https://localhost:31415"
     WLANPI_CORE_CA: str = "/etc/nginx/ssl/self-signed-wlanpi.cert"
     # Fallback wlanpi-core JWT for stdio transport, where there is no HTTP
@@ -56,4 +60,5 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
+    """Return the server settings from the config file."""
     return Settings()

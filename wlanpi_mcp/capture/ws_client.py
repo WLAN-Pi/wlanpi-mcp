@@ -25,7 +25,8 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 from wlanpi_mcp.capture.dot11 import (
@@ -67,7 +68,7 @@ _FREQ_IN_MESSAGE = re.compile(r"(\d{4})\s*MHz")
 class CaptureError(Exception):
     """A capture WebSocket command failed. ``code`` is the core event code."""
 
-    def __init__(self, message: str, code: Optional[str] = None) -> None:
+    def __init__(self, message: str, code: str | None = None) -> None:
         super().__init__(message)
         self.code = code
 
@@ -91,7 +92,7 @@ async def connect_capture(settings: Any) -> "CaptureSocket":
         # enough to trip the default 20 s keepalive timeout and tear a long
         # capture down mid-stream. We rely on our own duration bound instead.
         ws = await websockets.connect(url, max_size=None, ping_interval=None)
-    except Exception as exc:  # noqa: BLE001 - surfaced as a tool error dict
+    except Exception as exc:
         raise CaptureError(
             f"could not connect to the capture WebSocket at {url}: {exc}"
         ) from exc
@@ -123,30 +124,30 @@ class CaptureSocket:
     def __init__(self, ws: Any, url: str = "") -> None:
         self._ws = ws
         self.url = url
-        self.did: Optional[str] = None
-        self.session_id: Optional[str] = None
+        self.did: str | None = None
+        self.session_id: str | None = None
         #: The running config core snapshots for the session we own or joined.
-        self.session_config: Optional[dict] = None
+        self.session_config: dict[str, Any] | None = None
         #: pcapng chunks that arrived while awaiting an event, replayed by
         #: consume() so no captured bytes are dropped.
-        self._pending_binary: List[bytes] = []
+        self._pending_binary: list[bytes] = []
         #: CHANNEL_SET_FAILED / CHANNEL_HOP_ERROR seen on this socket.
-        self.channel_issues: List[dict] = []
+        self.channel_issues: list[dict[str, Any]] = []
         self.channel_sets = 0
         self._ended = False
 
     # -- plumbing ---------------------------------------------------------
 
-    async def _send(self, payload: dict) -> None:
+    async def _send(self, payload: dict[str, Any]) -> None:
         try:
             await self._ws.send(json.dumps(payload))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise CaptureError(
                 f"could not send '{payload.get('command')}' to the capture "
                 f"WebSocket: {_closed_reason(exc)}"
             ) from exc
 
-    def _record_event(self, event: dict) -> None:
+    def _record_event(self, event: dict[str, Any]) -> None:
         code = event.get("code")
         data = event.get("data") or {}
         if code == "CHANNEL_SET":
@@ -167,7 +168,7 @@ class CaptureSocket:
         elif code in END_CODES:
             self._ended = True
 
-    async def _next_event(self, timeout: float) -> dict:
+    async def _next_event(self, timeout: float) -> dict[str, Any]:
         """Return the next text event, buffering any binary frames."""
         while True:
             msg = await asyncio.wait_for(self._ws.recv(), timeout=timeout)
@@ -187,7 +188,7 @@ class CaptureSocket:
         codes: Sequence[str],
         what: str,
         timeout: float = COMMAND_TIMEOUT,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Wait for one of ``codes`` and return its ``data``.
 
@@ -209,14 +210,14 @@ class CaptureSocket:
                     raise CaptureError(f"{code}: {message}", code=code)
         except CaptureError:
             raise
-        except (asyncio.TimeoutError, TimeoutError) as exc:
+        except TimeoutError as exc:
             raise CaptureError(
                 f"timed out after {timeout:g}s waiting for {what} from the "
                 "capture WebSocket"
             ) from exc
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise CaptureError(
                 f"capture WebSocket failed while waiting for {what}: "
                 f"{_closed_reason(exc)}"
@@ -224,30 +225,34 @@ class CaptureSocket:
 
     # -- commands ---------------------------------------------------------
 
-    async def authenticate(self, token: str) -> Optional[str]:
+    async def authenticate(self, token: str) -> str | None:
         """Send the mandatory first auth message; returns the principal did."""
         await self._send({"command": "auth", "token": token})
         data = await self._await_code(["AUTH_OK"], "authentication")
         self.did = data.get("did")
         return self.did
 
-    async def list_sessions(self) -> List[dict]:
+    async def list_sessions(self) -> list[dict[str, Any]]:
+        """Return the running capture sessions reported by core."""
         await self._send({"command": "list_sessions"})
         data = await self._await_code(["SESSIONS"], "the session list")
         sessions = data.get("sessions")
         return sessions if isinstance(sessions, list) else []
 
-    async def get_supported_frequencies(self) -> dict:
+    async def get_supported_frequencies(self) -> dict[str, Any]:
+        """Return the frequencies each capture interface supports."""
         await self._send({"command": "get_supported_frequencies"})
         return await self._await_code(
             ["SUPPORTED_FREQUENCIES"], "the supported frequency list"
         )
 
-    async def configure(self, interfaces_cfg: dict) -> dict:
+    async def configure(self, interfaces_cfg: dict[str, Any]) -> dict[str, Any]:
+        """Apply the channel configuration to core and return the applied config."""
         await self._send({"command": "configure", "interfaces": interfaces_cfg})
         return await self._await_code(["CONFIG_APPLIED"], "the capture configuration")
 
     async def start(self, interfaces: Sequence[str], pcap_filter: str = "") -> str:
+        """Start a capture on the given interfaces and return its session id."""
         await self._send(
             {
                 "command": "start",
@@ -260,7 +265,8 @@ class CaptureSocket:
         self.session_config = data.get("config")
         return self.session_id or ""
 
-    async def subscribe(self, session_id: str) -> dict:
+    async def subscribe(self, session_id: str) -> dict[str, Any]:
+        """Subscribe to a running capture and return its owner, namespace, and config."""
         await self._send({"command": "subscribe", "session_id": session_id})
         data = await self._await_code(["SUBSCRIBED"], "the subscription")
         self.session_id = data.get("session_id") or session_id
@@ -281,6 +287,7 @@ class CaptureSocket:
             log.debug("Best-effort capture stop failed: %r", exc)
 
     async def close(self) -> None:
+        """Close the WebSocket, awaiting any coroutine close method."""
         closer = getattr(self._ws, "close", None)
         if closer is None:
             return
@@ -298,9 +305,9 @@ class CaptureSocket:
         reader: PcapngReader,
         table: ScanTable,
         duration_s: float,
-        frame_log: Optional[FrameLog] = None,
-        raw_sink: Optional[Any] = None,
-    ) -> dict:
+        frame_log: FrameLog | None = None,
+        raw_sink: Any | None = None,
+    ) -> dict[str, Any]:
         """
         Read the stream for ``duration_s``, dissecting frames.
 
@@ -327,7 +334,7 @@ class CaptureSocket:
                 break
             try:
                 msg = await asyncio.wait_for(self._ws.recv(), timeout=remaining)
-            except (asyncio.TimeoutError, TimeoutError):
+            except TimeoutError:
                 break
             except asyncio.CancelledError:
                 raise
@@ -363,7 +370,7 @@ class CaptureSocket:
         sink: Any,
         duration_s: float,
         stop_event: Optional["asyncio.Event"] = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Stream raw pcapng bytes to ``sink`` for up to ``duration_s`` seconds.
 
@@ -394,7 +401,7 @@ class CaptureSocket:
                 msg = await asyncio.wait_for(
                     self._ws.recv(), timeout=min(remaining, 1.0)
                 )
-            except (asyncio.TimeoutError, TimeoutError):
+            except TimeoutError:
                 # Wake to re-check the deadline and stop_event; not the end.
                 continue
             except asyncio.CancelledError:
@@ -430,7 +437,7 @@ class CaptureSocket:
         chunk: bytes,
         reader: PcapngReader,
         table: ScanTable,
-        frame_log: Optional[FrameLog] = None,
+        frame_log: FrameLog | None = None,
     ) -> None:
         for _linktype, ts, pkt in reader.feed(chunk):
             ap = parse_beacon(pkt)
@@ -444,6 +451,8 @@ class CaptureSocket:
                     frame_log.add(record, ts)
 
 
-def sessions_on_interface(sessions: Sequence[dict], interface: str) -> List[Dict]:
-    """Running sessions capturing on ``interface`` (one owner per interface)."""
+def sessions_on_interface(
+    sessions: Sequence[dict[str, Any]], interface: str
+) -> list[dict[str, Any]]:
+    """List sessions capturing on ``interface`` (one owner per interface)."""
     return [s for s in sessions if interface in (s.get("interfaces") or [])]

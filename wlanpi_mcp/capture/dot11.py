@@ -23,8 +23,9 @@ full protocol decoder, but it no longer throws information away.
 
 import struct
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any
 
 __all__ = [
     "ApInfo",
@@ -67,7 +68,7 @@ def channel_to_freq(ch: int) -> int:
     )
 
 
-def freq_to_channel(freq: int) -> Optional[int]:
+def freq_to_channel(freq: int) -> int | None:
     """Map a frequency in MHz to a channel number, or None if unknown."""
     if freq == 2484:
         return 14
@@ -154,7 +155,7 @@ def _signed8(b: bytes) -> int:
     return struct.unpack("<b", b[:1])[0]
 
 
-def _decode_rt_field(bit: int, raw: bytes, info: dict) -> None:
+def _decode_rt_field(bit: int, raw: bytes, info: dict[str, Any]) -> None:
     """Decode one radiotap field into ``info`` (best effort; never raises)."""
     try:
         if bit == 0:
@@ -248,9 +249,9 @@ def _decode_rt_field(bit: int, raw: bytes, info: dict) -> None:
         pass
 
 
-def _decode_mcs(raw: bytes) -> dict:
+def _decode_mcs(raw: bytes) -> dict[str, Any]:
     known, flags, index = raw[0], raw[1], raw[2]
-    out: dict = {}
+    out: dict[str, Any] = {}
     if known & 0x02:
         out["index"] = index
     if known & 0x01:
@@ -269,12 +270,12 @@ def _decode_mcs(raw: bytes) -> dict:
 _VHT_BW = {0: 20, 1: 40, 2: 40, 3: 40, 4: 80, 8: 80, 9: 80, 10: 80, 11: 160, 12: 160}
 
 
-def _decode_vht(raw: bytes) -> dict:
+def _decode_vht(raw: bytes) -> dict[str, Any]:
     known = struct.unpack_from("<H", raw, 0)[0]
     flags = raw[2]
     bw = raw[3] & 0x1F
     mcs_nss = raw[4:8]
-    out: dict = {"bandwidth_mhz": _VHT_BW.get(bw)}
+    out: dict[str, Any] = {"bandwidth_mhz": _VHT_BW.get(bw)}
     if known & 0x0004:
         out["short_gi"] = bool(flags & 0x04)
     users = []
@@ -286,7 +287,7 @@ def _decode_vht(raw: bytes) -> dict:
     return out
 
 
-def _decode_he(raw: bytes) -> dict:
+def _decode_he(raw: bytes) -> dict[str, Any]:
     d = list(struct.unpack_from("<HHHHHH", raw, 0))
     return {
         "ppdu_format": {0: "su", 1: "ext-su", 2: "mu", 3: "trig"}.get(d[0] & 0x0003),
@@ -301,7 +302,7 @@ def _decode_he(raw: bytes) -> dict:
     }
 
 
-def parse_radiotap_full(buf: bytes) -> Tuple[dict, int]:
+def parse_radiotap_full(buf: bytes) -> tuple[dict[str, Any], int]:
     """
     Decode a radiotap header end to end.
 
@@ -310,7 +311,7 @@ def parse_radiotap_full(buf: bytes) -> Tuple[dict, int]:
     ``_RT_NAMES``) plus a ``present`` list of the field names the header
     advertised, so callers can tell "absent" from "could not decode".
     """
-    info: dict = {}
+    info: dict[str, Any] = {}
     if len(buf) < 8:
         return info, 0
     _ver, _pad, length = struct.unpack_from("<BBH", buf, 0)
@@ -350,7 +351,7 @@ def parse_radiotap_full(buf: bytes) -> Tuple[dict, int]:
     return info, length
 
 
-def parse_radiotap(buf: bytes) -> Tuple[dict, int]:
+def parse_radiotap(buf: bytes) -> tuple[dict[str, Any], int]:
     """Back-compat projection: the freq/signal/txpower the AP path needs."""
     full, length = parse_radiotap_full(buf)
     return {
@@ -520,7 +521,7 @@ _ACTION_CATEGORIES = {
 }
 
 
-def _named(code: int, table: Dict[int, str]) -> dict:
+def _named(code: int, table: dict[int, str]) -> dict[str, Any]:
     return {"code": code, "name": table.get(code, "reserved")}
 
 
@@ -576,12 +577,12 @@ _MS_AKMS = {1: "802.1X", 2: "PSK"}
 
 
 def _suite(buf: bytes, off: int) -> bytes:
-    """The 4-byte cipher/AKM suite selector at ``off`` (OUI + type)."""
+    """Return the 4-byte cipher/AKM suite selector at ``off`` (OUI + type)."""
     end = off + 4
     return buf[off:end]
 
 
-def _suite_name(suite: bytes, ciphers: Dict[int, str]) -> str:
+def _suite_name(suite: bytes, ciphers: dict[int, str]) -> str:
     if len(suite) < 4:
         return "?"
     oui, t = suite[:3], suite[3]
@@ -596,9 +597,9 @@ def _suite_name(suite: bytes, ciphers: Dict[int, str]) -> str:
     return f"{oui.hex()}:{t}"
 
 
-def _akm_types(val: bytes) -> set:
-    """The set of RSN AKM suite type bytes in an RSN element (for labelling)."""
-    types: set = set()
+def _akm_types(val: bytes) -> set[int]:
+    """Return the set of RSN AKM suite type bytes in an RSN element (for labelling)."""
+    types: set[int] = set()
     try:
         off = 2 + 4  # version + group cipher
         pw_count = struct.unpack_from("<H", val, off)[0]
@@ -634,9 +635,9 @@ def _rsn_security(val: bytes) -> str:
     return "WPA2"
 
 
-def parse_rsn(val: bytes) -> dict:
+def parse_rsn(val: bytes) -> dict[str, Any]:
     """Full RSN element decode: version, ciphers, AKM suites, PMF."""
-    out: dict = {
+    out: dict[str, Any] = {
         "type": "RSN",
         "group_cipher": None,
         "pairwise_ciphers": [],
@@ -670,9 +671,9 @@ def parse_rsn(val: bytes) -> dict:
     return out
 
 
-def parse_wpa(val: bytes) -> dict:
+def parse_wpa(val: bytes) -> dict[str, Any]:
     """Full WPA (vendor) element decode. WPA1 has no PMF."""
-    out: dict = {
+    out: dict[str, Any] = {
         "type": "WPA",
         "group_cipher": None,
         "pairwise_ciphers": [],
@@ -701,7 +702,7 @@ def parse_wpa(val: bytes) -> dict:
     return out
 
 
-def _pmf_label(pmf: Optional[dict]) -> Optional[str]:
+def _pmf_label(pmf: dict[str, Any] | None) -> str | None:
     if not pmf:
         return None
     if pmf.get("required"):
@@ -718,24 +719,30 @@ def _pmf_label(pmf: Optional[dict]) -> Optional[str]:
 
 @dataclass
 class ApInfo:
+    """One observed access point, merged across beacons and probe responses."""
+
     bssid: str = ""
     ssid: str = ""
-    channel: Optional[int] = None
-    signal: Optional[int] = None
+    channel: int | None = None
+    signal: int | None = None
     security: str = "Open"
-    phy: set = field(default_factory=set)
-    txpower: Optional[int] = None
+    phy: set[str] = field(default_factory=set)
+    txpower: int | None = None
     country: str = ""
     count: int = 0
     last_seen: float = 0.0
-    rsn: Optional[dict] = None
-    wpa: Optional[dict] = None
-    bss_load: Optional[dict] = None
+    rsn: dict[str, Any] | None = None
+    wpa: dict[str, Any] | None = None
+    bss_load: dict[str, Any] | None = None
 
 
-def _parse_bss_load(val: bytes) -> Optional[dict]:
-    """Decode the QBSS/BSS Load element (tag 11): station count, channel
-    utilization (0-255 -> percent), and available admission capacity."""
+def _parse_bss_load(val: bytes) -> dict[str, Any] | None:
+    """
+    Decode the QBSS/BSS Load element (tag 11).
+
+    Returns the station count, channel utilization (0-255 -> percent), and
+    available admission capacity.
+    """
     if len(val) < 5:
         return None
     try:
@@ -752,7 +759,7 @@ def _parse_bss_load(val: bytes) -> Optional[dict]:
     }
 
 
-def _iter_ies(pkt: bytes, start: int):
+def _iter_ies(pkt: bytes, start: int) -> Iterator[tuple[int, bytes]]:
     """Yield (tag, value) for each information element from ``start``."""
     p = start
     end = len(pkt)
@@ -768,7 +775,7 @@ def _iter_ies(pkt: bytes, start: int):
         yield tag, val
 
 
-def _ssid_from_ies(pkt: bytes, start: int) -> Optional[str]:
+def _ssid_from_ies(pkt: bytes, start: int) -> str | None:
     for tag, val in _iter_ies(pkt, start):
         if tag == 0:
             if not val or not val.strip(b"\x00"):
@@ -777,7 +784,7 @@ def _ssid_from_ies(pkt: bytes, start: int) -> Optional[str]:
     return None
 
 
-def parse_beacon(pkt: bytes) -> Optional[ApInfo]:
+def parse_beacon(pkt: bytes) -> ApInfo | None:
     """Parse a management beacon/probe-response into ApInfo, else None."""
     rt_info, rtlen = parse_radiotap(pkt)
     if rtlen == 0:
@@ -855,7 +862,7 @@ def phy_label(ap: ApInfo) -> str:
     """Render the 802.11 amendments seen for an AP, e.g. 'g/n/ax'."""
     base = "g" if (ap.channel or 0) <= 14 else "a"
     amend = [x for x in _PHY_ORDER if x in ap.phy]
-    return "/".join([base] + amend)
+    return "/".join((base, *amend))
 
 
 # ---------------------------------------------------------------------------
@@ -863,23 +870,23 @@ def phy_label(ap: ApInfo) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _mac(pkt: bytes, off: int) -> Optional[str]:
+def _mac(pkt: bytes, off: int) -> str | None:
     end = off + 6
     if end > len(pkt):
         return None
     return ":".join(f"{b:02x}" for b in pkt[off:end])
 
 
-def _mgmt_result(subtype: int, pkt: bytes, body: int) -> Optional[dict]:
+def _mgmt_result(subtype: int, pkt: bytes, body: int) -> dict[str, Any] | None:
     """Decode the fixed 'result' fields of a management frame, if any."""
     n = len(pkt)
 
-    def u16(o: int) -> Optional[int]:
+    def u16(o: int) -> int | None:
         return struct.unpack_from("<H", pkt, o)[0] if o + 2 <= n else None
 
     if subtype in (1, 3):  # assoc-resp / reassoc-resp
         status, aid = u16(body + 2), u16(body + 4)
-        out: dict = {}
+        out: dict[str, Any] = {}
         if status is not None:
             out["status"] = _named(status, _STATUS_CODES)
         if aid is not None:
@@ -915,7 +922,7 @@ def _mgmt_result(subtype: int, pkt: bytes, body: int) -> Optional[dict]:
     return None
 
 
-def parse_frame(pkt: bytes) -> Optional[dict]:
+def parse_frame(pkt: bytes) -> dict[str, Any] | None:
     """
     Dissect any 802.11 frame into a JSON-safe record.
 
@@ -932,7 +939,7 @@ def parse_frame(pkt: bytes) -> Optional[dict]:
     type_name = _TYPE_NAMES.get(ftype, "unknown")
     sub_name = subtype_name(ftype, subtype)
 
-    rec: dict = {
+    rec: dict[str, Any] = {
         "type": type_name,
         "subtype": subtype,
         "kind": f"{type_name}/{sub_name}",
@@ -985,13 +992,14 @@ class FrameLog:
 
     def __init__(self, max_frames: int = DEFAULT_MAX_FRAMES) -> None:
         self.max_frames = max_frames
-        self.frames: List[dict] = []
-        self.counts: Dict[str, int] = {}
+        self.frames: list[dict[str, Any]] = []
+        self.counts: dict[str, int] = {}
         self.total = 0
         self.truncated = False
-        self._t0: Optional[float] = None
+        self._t0: float | None = None
 
-    def add(self, record: dict, ts: Optional[float] = None) -> None:
+    def add(self, record: dict[str, Any], ts: float | None = None) -> None:
+        """Record a dissected frame, updating counts and the capped record list."""
         self.total += 1
         kind = record.get("kind", "unknown")
         self.counts[kind] = self.counts.get(kind, 0) + 1
@@ -1006,7 +1014,8 @@ class FrameLog:
             record["t"] = round(ts - self._t0, 6)
         self.frames.append(record)
 
-    def to_result(self) -> dict:
+    def to_result(self) -> dict[str, Any]:
+        """Return counts and the capped per-frame records as a result dict."""
         return {
             "frames": self.frames,
             "frame_total": self.total,
@@ -1027,10 +1036,11 @@ class ScanTable:
     """BSSID-keyed merge of everything seen during one capture window."""
 
     def __init__(self) -> None:
-        self.aps: Dict[str, ApInfo] = {}
+        self.aps: dict[str, ApInfo] = {}
         self.other = 0
 
     def update(self, ap: ApInfo) -> None:
+        """Merge one observed AP into the table, or add it as a new row."""
         existing = self.aps.get(ap.bssid)
         if existing is None:
             ap.count = 1
@@ -1059,7 +1069,7 @@ class ScanTable:
             existing.bss_load = ap.bss_load
         existing.phy |= ap.phy
 
-    def to_result(self) -> List[dict]:
+    def to_result(self) -> list[dict[str, Any]]:
         """JSON-safe AP rows, strongest signal first within each channel."""
         rows = sorted(
             self.aps.values(),

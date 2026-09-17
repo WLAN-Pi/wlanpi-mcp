@@ -1,18 +1,17 @@
+import httpx
 import pytest
 import respx
-import httpx
-
-from wlanpi_mcp.config import Settings
-
 
 # ── WLAN ─────────────────────────────────────────────────────────────────────
+
 
 @respx.mock
 @pytest.mark.asyncio
 async def test_scan_wlan_uses_canonical_endpoint():
     from unittest.mock import AsyncMock, MagicMock
-    from wlanpi_mcp.tools.wlan import register
+
     from wlanpi_mcp._compat import FastMCP
+    from wlanpi_mcp.tools.wlan import register
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"nets": []})
@@ -31,12 +30,16 @@ async def test_scan_wlan_uses_canonical_endpoint():
 
 
 def test_deprecated_wlan_tools_removed():
-    """/network/wlan/set returns 410 Gone and getInterfaces/getConnected are
+    """Verify deprecated /network/wlan tools were removed.
+
+    /network/wlan/set returns 410 Gone and getInterfaces/getConnected are
     deprecated upstream — their tools were removed in favour of the netconfig
-    tools (create/activate config, config status)."""
+    tools (create/activate config, config status).
+    """
     from unittest.mock import MagicMock
-    from wlanpi_mcp.tools.wlan import register
+
     from wlanpi_mcp._compat import FastMCP
+    from wlanpi_mcp.tools.wlan import register
 
     mcp = FastMCP("test")
     register(mcp, MagicMock())
@@ -50,6 +53,7 @@ def test_deprecated_wlan_tools_removed():
 
 
 # ── VLAN ─────────────────────────────────────────────────────────────────────
+
 
 @respx.mock
 @pytest.mark.asyncio
@@ -86,6 +90,7 @@ async def test_delete_vlan(client):
 
 # ── Profiler ──────────────────────────────────────────────────────────────────
 
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_profiler_status(client):
@@ -100,8 +105,9 @@ async def test_get_profiler_status(client):
 @pytest.mark.asyncio
 async def test_start_profiler_builds_minimal_body():
     from unittest.mock import AsyncMock, MagicMock
-    from wlanpi_mcp.tools.profiler import register
+
     from wlanpi_mcp._compat import FastMCP
+    from wlanpi_mcp.tools.profiler import register
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"success": True})
@@ -120,11 +126,14 @@ async def test_start_profiler_builds_minimal_body():
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
 
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_bluetooth_status(client):
     respx.get("https://localhost:31415/api/v1/bluetooth/status").mock(
-        return_value=httpx.Response(200, json={"name": "WLAN Pi", "power": True, "paired_devices": []})
+        return_value=httpx.Response(
+            200, json={"name": "WLAN Pi", "power": True, "paired_devices": []}
+        )
     )
     result = await client.get("/api/v1/bluetooth/status")
     assert result["name"] == "WLAN Pi"
@@ -142,6 +151,7 @@ async def test_set_bluetooth_power_on(client):
 
 # ── Network Config ────────────────────────────────────────────────────────────
 
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_list_network_configs(client):
@@ -156,7 +166,10 @@ async def test_list_network_configs(client):
 @pytest.mark.asyncio
 async def test_activate_network_config(client):
     respx.post("https://localhost:31415/api/v1/network/config/activate/office").mock(
-        return_value=httpx.Response(200, json={"id": "office", "message": "Configuration activated successfully"})
+        return_value=httpx.Response(
+            200,
+            json={"id": "office", "message": "Configuration activated successfully"},
+        )
     )
     result = await client.post("/api/v1/network/config/activate/office")
     assert result["id"] == "office"

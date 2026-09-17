@@ -1,7 +1,9 @@
+"""Async HTTP client for the wlanpi-core API, forwarding the client's JWT."""
+
 import logging
 import ssl
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import httpx
 
@@ -14,12 +16,14 @@ _client: Optional["CoreClient"] = None
 
 
 def get_client() -> "CoreClient":
+    """Return the initialized CoreClient, raising if not yet initialized."""
     if _client is None:
         raise RuntimeError("CoreClient not initialized — call init_client() first")
     return _client
 
 
 def init_client(settings: Settings) -> "CoreClient":
+    """Initialize and return the module-global CoreClient for the given settings."""
     global _client
     _client = CoreClient(settings)
     return _client
@@ -46,7 +50,7 @@ class CoreClient:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         ca = settings.WLANPI_CORE_CA
-        verify: Union[ssl.SSLContext, bool] = (
+        verify: ssl.SSLContext | bool = (
             ssl.create_default_context(cafile=ca) if ca and Path(ca).is_file() else True
         )
         self._http = httpx.AsyncClient(
@@ -56,23 +60,28 @@ class CoreClient:
         )
 
     async def close(self) -> None:
+        """Close the underlying HTTP client."""
         await self._http.aclose()
 
     async def get(self, path: str, **kwargs: Any) -> Any:
+        """Send a GET request to the given wlanpi-core path."""
         return await self._request("GET", path, **kwargs)
 
     async def post(self, path: str, **kwargs: Any) -> Any:
+        """Send a POST request to the given wlanpi-core path."""
         return await self._request("POST", path, **kwargs)
 
     async def patch(self, path: str, **kwargs: Any) -> Any:
+        """Send a PATCH request to the given wlanpi-core path."""
         return await self._request("PATCH", path, **kwargs)
 
     async def delete(self, path: str, **kwargs: Any) -> Any:
+        """Send a DELETE request to the given wlanpi-core path."""
         return await self._request("DELETE", path, **kwargs)
 
     def current_token(self) -> str:
         """
-        The wlanpi-core token for this request, by the same rule as REST calls.
+        Return the wlanpi-core token for this request, by the same rule as REST calls.
 
         Public so non-HTTP core transports (the capture WebSocket, which sends
         the token in its first message) reuse this resolution instead of

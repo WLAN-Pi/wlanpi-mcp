@@ -1,17 +1,16 @@
-import os
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from wlanpi_mcp._compat import FastMCP
-from wlanpi_mcp.client.core_client import CoreClient
-from wlanpi_mcp.config import Settings
-
 
 # ── Advanced (mode, regulatory, battery) ─────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_device_mode_uses_api():
     from wlanpi_mcp.tools import advanced
+
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"mode": "hotspot", "model": "R4"})
     mcp = FastMCP("test")
@@ -28,6 +27,7 @@ async def test_get_device_mode_uses_api():
 @pytest.mark.asyncio
 async def test_get_device_mode_flags_unknown_mode():
     from wlanpi_mcp.tools import advanced
+
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"mode": "bogus"})
     mcp = FastMCP("test")
@@ -43,6 +43,7 @@ async def test_get_device_mode_flags_unknown_mode():
 @pytest.mark.asyncio
 async def test_get_battery_status_uses_api():
     from wlanpi_mcp.tools import advanced
+
     mock_client = MagicMock()
     mock_client.get = AsyncMock(
         return_value={"present": True, "capacity_percent": 78, "status": "Discharging"}
@@ -61,8 +62,11 @@ async def test_get_battery_status_uses_api():
 @pytest.mark.asyncio
 async def test_get_regulatory_domain_uses_api():
     from wlanpi_mcp.tools import advanced
+
     mock_client = MagicMock()
-    mock_client.get = AsyncMock(return_value={"country": "US", "raw": "country US: DFS-FCC"})
+    mock_client.get = AsyncMock(
+        return_value={"country": "US", "raw": "country US: DFS-FCC"}
+    )
     mcp = FastMCP("test")
     advanced.register(mcp, mock_client)
 
@@ -76,6 +80,7 @@ async def test_get_regulatory_domain_uses_api():
 @pytest.mark.asyncio
 async def test_set_regulatory_domain_validates_code():
     from wlanpi_mcp.tools import advanced
+
     mock_client = MagicMock()
     mcp = FastMCP("test")
     advanced.register(mcp, mock_client)
@@ -88,6 +93,7 @@ async def test_set_regulatory_domain_validates_code():
 @pytest.mark.asyncio
 async def test_set_regulatory_domain_accepts_valid_code():
     from wlanpi_mcp.tools import advanced
+
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"country": "US"})
     mcp = FastMCP("test")

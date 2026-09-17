@@ -1,9 +1,12 @@
+"""Command-line entry point for the WLAN Pi MCP server."""
+
 import argparse
 import logging
 import sys
 
+from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import init_client
-from wlanpi_mcp.config import get_settings
+from wlanpi_mcp.config import Settings, get_settings
 
 
 def _configure_logging(level: str) -> None:
@@ -15,6 +18,7 @@ def _configure_logging(level: str) -> None:
 
 
 def main() -> None:
+    """Run the WLAN Pi MCP server over the requested transport."""
     parser = argparse.ArgumentParser(
         description="WLAN Pi MCP server",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -56,7 +60,7 @@ def main() -> None:
         _run_sse(mcp, settings, host, port)
 
 
-def _run_sse(mcp, settings, host: str, port: int) -> None:
+def _run_sse(mcp: FastMCP, settings: Settings, host: str, port: int) -> None:
     import uvicorn
 
     from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware

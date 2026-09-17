@@ -1,3 +1,5 @@
+"""MCP resource for the wlanpi-profiler status."""
+
 import json
 import time
 from typing import Any
@@ -20,6 +22,7 @@ async def _cached_get(client: CoreClient, path: str, ttl: float) -> Any:
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the profiler status resource."""
 
     @mcp.resource("profiler://status")
     async def profiler_status() -> str:

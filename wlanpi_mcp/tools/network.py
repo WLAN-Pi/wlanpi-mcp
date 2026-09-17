@@ -1,13 +1,16 @@
-from typing import Optional
+"""MCP tools for network interfaces, routing, DHCP, and WLAN drivers."""
+
+from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register the network diagnostic tools."""
 
     @mcp.tool()
-    async def get_network_interfaces(interface: Optional[str] = None) -> dict:
+    async def get_network_interfaces(interface: str | None = None) -> dict[str, Any]:
         """
         Get network interface details including IP addresses, flags, MTU, and link state.
 
@@ -19,20 +22,23 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get("/api/v1/network/interfaces")
 
     @mcp.tool()
-    async def get_network_info() -> dict:
+    async def get_network_info() -> dict[str, Any]:
         """
-        Get a full network snapshot: all interfaces, WLAN details, ethernet IP config, VLAN info,
-        LLDP/CDP neighbours, and public IP address. Best starting point for network diagnostics.
+        Get a full network snapshot.
+
+        Covers all interfaces, WLAN details, ethernet IP config, VLAN info,
+        LLDP/CDP neighbours, and public IP address. Best starting point for
+        network diagnostics.
         """
         return await client.get("/api/v1/network/info/")
 
     @mcp.tool()
-    async def get_public_ipv6() -> dict:
+    async def get_public_ipv6() -> dict[str, Any]:
         """Get the WLAN Pi's public IPv6 address and related details."""
         return await client.get("/api/v1/network/info/publicip6")
 
     @mcp.tool()
-    async def get_ethernet_interface(interface: str) -> dict:
+    async def get_ethernet_interface(interface: str) -> dict[str, Any]:
         """
         Get ethernet interface details for a specific interface.
 
@@ -42,7 +48,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get(f"/api/v1/network/ethernet/{interface}")
 
     @mcp.tool()
-    async def get_routing_table(namespace: Optional[str] = None) -> dict:
+    async def get_routing_table(namespace: str | None = None) -> dict[str, Any]:
         """
         Get the structured IP routing table.
 
@@ -53,7 +59,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get("/api/v1/network/routing", params=params)
 
     @mcp.tool()
-    async def get_tcp_connections(namespace: Optional[str] = None) -> dict:
+    async def get_tcp_connections(namespace: str | None = None) -> dict[str, Any]:
         """
         Get active TCP sockets/connections on the WLAN Pi.
 
@@ -64,7 +70,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get("/api/v1/network/connections/tcp", params=params)
 
     @mcp.tool()
-    async def get_udp_connections(namespace: Optional[str] = None) -> dict:
+    async def get_udp_connections(namespace: str | None = None) -> dict[str, Any]:
         """
         Get active UDP sockets on the WLAN Pi.
 
@@ -75,12 +81,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get("/api/v1/network/connections/udp", params=params)
 
     @mcp.tool()
-    async def get_dhcp_leases() -> dict:
+    async def get_dhcp_leases() -> dict[str, Any]:
         """Get DHCP leases held by the WLAN Pi (parsed from dhclient lease files)."""
         return await client.get("/api/v1/network/dhcp/leases")
 
     @mcp.tool()
-    async def get_interface_link_stats(interface: str) -> dict:
+    async def get_interface_link_stats(interface: str) -> dict[str, Any]:
         """
         Get per-interface link statistics (via ethtool): speed, duplex, errors, drops.
 
@@ -90,10 +96,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get(f"/api/v1/network/interfaces/{interface}/link-stats")
 
     @mcp.tool()
-    async def renew_dhcp_lease(interface: str) -> dict:
+    async def renew_dhcp_lease(interface: str) -> dict[str, Any]:
         """
-        Renew the DHCP lease for an interface in its current namespace.
-        The interface IP address may change as a result.
+        Renew the DHCP lease for an interface.
+
+        The renewal happens in the interface's current namespace, and the
+        interface IP address may change as a result.
 
         Args:
             interface: Interface name (e.g. 'eth0')
@@ -101,18 +109,20 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.post(f"/api/v1/network/interfaces/{interface}/renew")
 
     @mcp.tool()
-    async def get_wlan_usb_drivers() -> dict:
+    async def get_wlan_usb_drivers() -> dict[str, Any]:
         """
-        List USB-attached WLAN adapters and their bound drivers. If 'adapters' is
-        empty but interfaces_scanned > 0, the radios are PCI/on-board — use
-        get_wlan_pci_drivers instead.
+        List USB-attached WLAN adapters and their bound drivers.
+
+        If 'adapters' is empty but interfaces_scanned > 0, the radios are
+        PCI/on-board — use get_wlan_pci_drivers instead.
         """
         return await client.get("/api/v1/network/wlan/usb-drivers")
 
     @mcp.tool()
-    async def get_wlan_pci_drivers() -> dict:
+    async def get_wlan_pci_drivers() -> dict[str, Any]:
         """
-        List PCI/platform wireless devices (from lspci) and bound WLAN interface
-        drivers for built-in Wi-Fi radios.
+        List PCI/platform wireless devices and their bound WLAN drivers.
+
+        Comes from lspci, covering built-in Wi-Fi radios.
         """
         return await client.get("/api/v1/network/wlan/pci-drivers")

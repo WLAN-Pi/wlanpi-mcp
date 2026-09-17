@@ -17,7 +17,7 @@ def settings():
 
 @pytest.fixture
 def bearer_token():
-    """Simulates BearerTokenMiddleware having captured a client JWT."""
+    """Simulate BearerTokenMiddleware having captured a client JWT."""
     ctx = current_token.set(FAKE_TOKEN)
     yield FAKE_TOKEN
     current_token.reset(ctx)

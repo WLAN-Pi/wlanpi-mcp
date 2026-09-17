@@ -14,7 +14,7 @@ can import it without a circular dependency.
 import os
 import re
 import time
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from wlanpi_mcp.config import get_settings
 
@@ -25,6 +25,7 @@ _SAFE_RE = re.compile(r"[^A-Za-z0-9_]+")
 
 
 def file_size(path: str) -> int:
+    """Return the size of the file at path in bytes, or 0 if unreadable."""
     try:
         return os.path.getsize(path)
     except OSError:
@@ -32,33 +33,38 @@ def file_size(path: str) -> int:
 
 
 def capture_dir() -> str:
+    """Return the resolved managed capture directory path."""
     return os.path.realpath(get_settings().PCAP_CAPTURE_DIR)
 
 
 def within_capture_dir(path: str) -> bool:
+    """Return True if the given path resolves inside the managed capture directory."""
     base = capture_dir()
     resolved = os.path.realpath(path)
     return resolved == base or resolved.startswith(base + os.sep)
 
 
 def safe_component(value: str) -> str:
-    """A filesystem-safe rendering of a capture id for use in a filename."""
+    """Render a capture id filesystem-safely for use in a filename."""
     return _SAFE_RE.sub("_", value) or "capture"
 
 
 def capture_filename(capture_id: str) -> str:
+    """Return a timestamped, capture-id-keyed pcapng filename."""
     stamp = time.strftime("%Y%m%dT%H%M%S")
     return f"capture-{stamp}-{safe_component(capture_id)}.pcapng"
 
 
 def session_from_filename(name: str) -> str:
+    """Recover the capture id from a ``capture-<stamp>-<id>.pcapng`` filename."""
     base = name[: -len(".pcapng")] if name.endswith(".pcapng") else name
     parts = base.split("-", 2)  # "capture", stamp, safe-capture-id
     return parts[2] if len(parts) == 3 else base
 
 
-def open_capture_file(capture_id: str) -> Tuple[str, Any]:
-    """Create the capture dir and open a new unbuffered pcapng file for writing.
+def open_capture_file(capture_id: str) -> tuple[str, Any]:
+    """
+    Create the capture dir and open a new unbuffered pcapng file for writing.
 
     Unbuffered so a fetch mid-capture sees the bytes written so far. Returns
     ``(path, fileobj)``.
@@ -69,10 +75,13 @@ def open_capture_file(capture_id: str) -> Tuple[str, Any]:
     return path, open(path, "wb", buffering=0)
 
 
-def try_open_capture_file(capture_id: str) -> Tuple[Optional[str], Any]:
-    """Best-effort :func:`open_capture_file`: never raises. Returns
-    ``(path, fileobj)`` on success, ``(None, None)`` if the file could not be
-    opened, so a storage problem never breaks a live capture."""
+def try_open_capture_file(capture_id: str) -> tuple[str | None, Any]:
+    """
+    Best-effort :func:`open_capture_file`: never raises.
+
+    Returns ``(path, fileobj)`` on success, ``(None, None)`` if the file could
+    not be opened, so a storage problem never breaks a live capture.
+    """
     try:
         return open_capture_file(capture_id)
     except OSError:

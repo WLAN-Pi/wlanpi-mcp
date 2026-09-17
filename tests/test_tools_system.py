@@ -1,15 +1,17 @@
+import httpx
 import pytest
 import respx
-import httpx
 
-from wlanpi_mcp.config import Settings, ALLOWED_SERVICES
+from wlanpi_mcp.config import ALLOWED_SERVICES
 
 
 @respx.mock
 @pytest.mark.asyncio
 async def test_get_device_info(client):
     respx.get("https://localhost:31415/api/v1/system/device/info").mock(
-        return_value=httpx.Response(200, json={"model": "WLAN Pi Pro", "mode": "classic"})
+        return_value=httpx.Response(
+            200, json={"model": "WLAN Pi Pro", "mode": "classic"}
+        )
     )
     result = await client.get("/api/v1/system/device/info")
     assert result["model"] == "WLAN Pi Pro"
@@ -19,9 +21,13 @@ async def test_get_device_info(client):
 @pytest.mark.asyncio
 async def test_get_service_status(client):
     respx.get("https://localhost:31415/api/v1/system/service/status").mock(
-        return_value=httpx.Response(200, json={"name": "wlanpi-profiler", "active": False})
+        return_value=httpx.Response(
+            200, json={"name": "wlanpi-profiler", "active": False}
+        )
     )
-    result = await client.get("/api/v1/system/service/status", params={"name": "wlanpi-profiler"})
+    result = await client.get(
+        "/api/v1/system/service/status", params={"name": "wlanpi-profiler"}
+    )
     assert result["active"] is False
 
 

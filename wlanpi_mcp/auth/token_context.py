@@ -7,10 +7,10 @@ API call, where wlanpi-core validates it.
 """
 
 from contextvars import ContextVar
-from typing import Optional
 
-current_token: ContextVar[Optional[str]] = ContextVar("wlanpi_core_token", default=None)
+current_token: ContextVar[str | None] = ContextVar("wlanpi_core_token", default=None)
 
 
-def get_token() -> Optional[str]:
+def get_token() -> str | None:
+    """Return the current request's wlanpi-core JWT, or None."""
     return current_token.get()

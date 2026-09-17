@@ -1,7 +1,10 @@
+"""MCP prompts for network and service diagnostics."""
+
 from wlanpi_mcp._compat import FastMCP
 
 
 def register(mcp: FastMCP) -> None:
+    """Register the diagnostic prompts."""
 
     @mcp.prompt()
     def diagnose_connectivity() -> str:

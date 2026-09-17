@@ -20,11 +20,10 @@ frame dissector can report inter-frame timing.)
 """
 
 import struct
-from typing import Dict, List, Optional, Tuple
 
 __all__ = ["PcapngReader"]
 
-Packet = Tuple[int, Optional[float], bytes]
+Packet = tuple[int, float | None, bytes]
 
 
 class PcapngReader:
@@ -46,13 +45,14 @@ class PcapngReader:
     def __init__(self) -> None:
         self.buf = bytearray()
         self.endian = "<"
-        self.linktypes: Dict[int, int] = {}
-        self.tsresol: Dict[int, float] = {}
+        self.linktypes: dict[int, int] = {}
+        self.tsresol: dict[int, float] = {}
         self._iface_seq = 0
 
-    def feed(self, data: bytes) -> List[Packet]:
+    def feed(self, data: bytes) -> list[Packet]:
+        """Feed a byte chunk and return any complete packets it completes."""
         self.buf += data
-        out: List[Packet] = []
+        out: list[Packet] = []
         while len(self.buf) >= 12:
             if bytes(self.buf[0:4]) == b"\x0a\x0d\x0d\x0a":
                 bom = bytes(self.buf[8:12])
@@ -72,7 +72,7 @@ class PcapngReader:
             self._handle_block(block, out)
         return out
 
-    def _handle_block(self, block: bytes, out: List[Packet]) -> None:
+    def _handle_block(self, block: bytes, out: list[Packet]) -> None:
         e = self.endian
         btype = struct.unpack_from(e + "I", block, 0)[0]
         if btype == self.SHB:

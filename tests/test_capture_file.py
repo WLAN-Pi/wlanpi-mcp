@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from wlanpi_mcp._compat import FastMCP
 from mcp.types import EmbeddedResource
 
 from tests.test_capture_tools import (
@@ -17,10 +16,11 @@ from tests.test_capture_tools import (
     CONFIG_APPLIED,
     StubWS,
     pcapng_chunks,
-    sessions_event,
     session,
+    sessions_event,
     started_event,
 )
+from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import CaptureSocket
 from wlanpi_mcp.config import Settings
@@ -28,8 +28,10 @@ from wlanpi_mcp.tools import capture_file
 
 
 class BlockingWS(StubWS):
-    """Like StubWS but, once its script is exhausted, blocks instead of raising
-    — so the capture stays 'running' until an early stop trips the poll."""
+    """Like StubWS but, once its script is exhausted, blocks instead of raising.
+
+    The capture stays 'running' until an early stop trips the poll.
+    """
 
     async def recv(self):
         if self.script:
@@ -264,7 +266,7 @@ async def test_fetch_via_real_dispatch_path_resolves_capture_id(capdir):
     by_alias = await tools["fetch_pcap_file"].fn(session_id="cap_run_path")
     for result in (by_capture_id, by_alias):
         assert isinstance(result, EmbeddedResource)
-        assert result.resource.mime_type == "application/vnd.tcpdump.pcapng"
+        assert result.resource.mimeType == "application/vnd.tcpdump.pcapng"
 
 
 # ── list_pcap_files ──────────────────────────────────────────────────────────
@@ -315,7 +317,7 @@ async def test_fetch_returns_a_pcapng_blob(capdir):
 
     fetched = await tools["fetch_pcap_file"].fn(capture_id="cap_fetch")
     assert isinstance(fetched, EmbeddedResource)
-    assert fetched.resource.mime_type == "application/vnd.tcpdump.pcapng"
+    assert fetched.resource.mimeType == "application/vnd.tcpdump.pcapng"
     assert base64.b64decode(fetched.resource.blob) == Path(entry.path).read_bytes()
     # The deprecated session_id alias still resolves the same capture.
     via_alias = await tools["fetch_pcap_file"].fn(session_id="cap_fetch")
