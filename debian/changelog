@@ -1,3 +1,16 @@
+wlanpi-mcp (0.6.10-1) unstable; urgency=medium
+
+  * Fix SSE connections through the nginx front failing with 421 Misdirected
+    Request. Since the daemon moved to a loopback-only bind (0.6.8), the MCP
+    SDK auto-enabled DNS rebinding protection for host=127.0.0.1 and rejected
+    the LAN Host header that nginx forwards (proxy_set_header Host $http_host),
+    so every GET /sse on 8766/8767 was refused. The server now disables that
+    check explicitly: the transport is protected by the mandatory wlanpi-core
+    Bearer JWT, which a rebinding page cannot supply. Adds regression tests
+    that drive the assembled SSE app with forwarded LAN Host/Origin headers.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 18 Sep 2026 09:45:00 -0400
+
 wlanpi-mcp (0.6.9-1) unstable; urgency=medium
 
   * Offer both SSE endpoints behind the nginx front: TLS on 8767 (preferred,

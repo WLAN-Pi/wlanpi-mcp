@@ -1,6 +1,6 @@
 """Assemble the WLAN Pi MCP server and register all tools, resources, and prompts."""
 
-from wlanpi_mcp._compat import FastMCP
+from wlanpi_mcp._compat import FastMCP, TransportSecuritySettings
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.prompts import diagnostics
 from wlanpi_mcp.resources import bluetooth as bt_res
@@ -38,6 +38,15 @@ def create_server(
         ),
         host=host,
         port=port,
+        # The SSE daemon binds loopback-only behind nginx, which forwards the
+        # client's real Host header (e.g. 10.254.102.51:8767). FastMCP would
+        # otherwise auto-enable DNS rebinding protection for a loopback bind
+        # and answer every /sse request with 421 Misdirected Request. The
+        # Bearer JWT gate in middleware/bearer_token.py is what protects the
+        # transport: a rebinding page in a browser cannot attach that header.
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        ),
     )
 
     # Phase 1 — system, network, utils
