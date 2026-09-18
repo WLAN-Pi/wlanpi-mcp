@@ -108,6 +108,7 @@ Edit your Claude Desktop config file:
 Notes:
 
 - The TLS endpoint (8767) uses the same self-signed certificate as wlanpi-core, so your client must trust it (`/etc/nginx/ssl/self-signed-wlanpi.cert` on the device), or accept the cert warning. The JWT is encrypted in transit.
+- The daemon relies on the Bearer JWT gate, not on the MCP SDK's Host/Origin (DNS rebinding) check, which is disabled because nginx forwards the client's real Host header to the loopback-only daemon. A `421 Misdirected Request` on `/sse` means that check is on again.
 - Harness cannot validate the self-signed cert and has no trust-store option (e.g. goose)? Use `http://<wlanpi-ip>:8766/sse` instead. That port is plaintext, so the JWT is sniffable on the LAN - use it only on a trusted network or during development, and add `self-signed-wlanpi.cert` to the harness's trust store when it can.
 - `--transport sse-only` skips mcp-remote's streamable-HTTP probe; this server speaks SSE.
 - The token is passed via the `env` block and interpolated into the header (`${WLANPI_TOKEN}`) - this sidesteps a known mcp-remote issue with spaces in `args` values on some platforms.
