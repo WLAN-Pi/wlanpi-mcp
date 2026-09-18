@@ -1,6 +1,8 @@
 """Tests for the capture tools that drive the wlanpi-core capture WebSocket."""
 
+import asyncio
 import json
+import ssl
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -807,3 +809,30 @@ def test_capture_ws_url_never_carries_the_token():
         Settings(WLANPI_CORE_URL="http://localhost:31415", _env_file=None)
     )
     assert "token" not in url and "?" not in url
+
+
+def test_connect_capture_ssl_matches_url_scheme(monkeypatch):
+    from wlanpi_mcp.capture import ws_client
+
+    captured: dict[str, object] = {}
+
+    async def fake_connect(url, **_kwargs):
+        captured["ssl"] = _kwargs.get("ssl")
+        raise OSError("stop")
+
+    monkeypatch.setattr("websockets.connect", fake_connect)
+
+    for base, expect_ssl in (
+        ("https://localhost:31415", True),
+        ("http://localhost:31415", False),
+    ):
+        with pytest.raises(ws_client.CaptureError):
+            asyncio.run(
+                ws_client.connect_capture(
+                    Settings(WLANPI_CORE_URL=base, _env_file=None)
+                )
+            )
+        if expect_ssl:
+            assert isinstance(captured["ssl"], ssl.SSLContext)
+        else:
+            assert captured["ssl"] is None
