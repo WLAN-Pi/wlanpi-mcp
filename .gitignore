@@ -19,3 +19,6 @@ debian/files
 debian/debhelper-build-stamp
 debian/*.substvars
 debian/*.debhelper
+
+# Built packages
+*.deb

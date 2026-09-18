@@ -1,3 +1,17 @@
+wlanpi-mcp (0.6.11-1) unstable; urgency=medium
+
+  * Verify the capture WebSocket against WLANPI_CORE_CA. connect_capture
+    called websockets.connect with no SSL context, so it fell back to the
+    system trust store and rejected wlanpi-core's self-signed cert
+    (CERTIFICATE_VERIFY_FAILED), breaking every capture tool even though the
+    REST client verified fine against the same CA.
+  * Stop the SSE daemon writing bytecode at runtime (PYTHONDONTWRITEBYTECODE).
+    Python created __pycache__/*.pyc under the installed package, which dpkg
+    does not own, so 'apt purge wlanpi-mcp' left
+    /opt/wlanpi-mcp/.../site-packages/wlanpi_mcp behind.
+
+ -- Josh Schmelzle <josh@joshschmelzle.com>  Fri, 18 Sep 2026 12:10:00 -0400
+
 wlanpi-mcp (0.6.10-1) unstable; urgency=medium
 
   * Fix SSE connections through the nginx front failing with 421 Misdirected
