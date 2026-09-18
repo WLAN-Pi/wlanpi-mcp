@@ -26,7 +26,7 @@ from wlanpi_mcp.tools import (
 
 
 def create_server(
-    client: CoreClient, host: str = "127.0.0.1", port: int = 8767
+    client: CoreClient, host: str = "127.0.0.1", port: int = 8768
 ) -> FastMCP:
     """Create a WLAN Pi MCP server with all tools, resources, and prompts registered."""
     mcp = FastMCP(

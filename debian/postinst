@@ -19,17 +19,18 @@ WLANPI_CORE_CA=/etc/nginx/ssl/self-signed-wlanpi.cert
 # empty: clients must send their own token as 'Authorization: Bearer <token>'.
 WLANPI_CORE_TOKEN=
 WLANPI_MCP_HOST=127.0.0.1
-WLANPI_MCP_PORT=8767
+WLANPI_MCP_PORT=8768
 LOG_LEVEL=INFO
 # Allow MCP clients to reboot/shut down the device. Set false to disable.
 ALLOW_POWER_CONTROL=true
 EOF
             echo ""
             echo "============================================================"
-            echo "  WLAN Pi MCP Server installed (SSE over TLS on port 8766)"
+            echo "  WLAN Pi MCP Server installed"
             echo "  Clients authenticate with a wlanpi-core JWT:"
             echo "  POST https://<device>:31415/api/v1/auth/token"
-            echo "  Then connect to https://<device>:8766/sse"
+            echo "  Then connect to https://<device>:8767/sse (TLS)"
+            echo "  or http://<device>:8766/sse (plaintext fallback)"
             echo "============================================================"
             echo ""
         else
@@ -39,20 +40,23 @@ EOF
             if ! grep -q '^WLANPI_CORE_CA=' "$CONFIG_FILE"; then
                 echo 'WLANPI_CORE_CA=/etc/nginx/ssl/self-signed-wlanpi.cert' >> "$CONFIG_FILE"
             fi
-            # Upgrade: the SSE daemon is now fronted by nginx over TLS. It must
-            # bind loopback-only, or its port collides with nginx's new 8766 ssl
-            # listener (EADDRINUSE) and the service fails to start.
+            # Upgrade: the SSE daemon is fronted by nginx (TLS on 8767,
+            # plaintext fallback on 8766). It must bind loopback-only, or its
+            # port collides with nginx's listeners (EADDRINUSE) and the service
+            # fails to start. Chain the migrations so a device on any prior
+            # version lands on the current loopback upstream port 8768.
             sed -i 's|^WLANPI_MCP_HOST=0.0.0.0$|WLANPI_MCP_HOST=127.0.0.1|' "$CONFIG_FILE"
-            sed -i 's|^WLANPI_MCP_PORT=8766$|WLANPI_MCP_PORT=8767|' "$CONFIG_FILE"
+            sed -i 's|^WLANPI_MCP_PORT=8766$|WLANPI_MCP_PORT=8768|' "$CONFIG_FILE"
+            sed -i 's|^WLANPI_MCP_PORT=8767$|WLANPI_MCP_PORT=8768|' "$CONFIG_FILE"
         fi
 
         chmod 640 "$CONFIG_FILE"
         chown root:wlanpi "$CONFIG_FILE" 2>/dev/null || true
 
-        # Open the SSE port in UFW via the shipped application profile
+        # Open the SSE ports in UFW via the shipped application profile
         # (/etc/ufw/applications.d/wlanpi-mcp). The setup script installs the
-        # profile and runs `ufw allow wlanpi-mcp`; 8766 is defined in
-        # /etc/wlanpi-mcp/ufw/wlanpi-mcp.rules, adjust there if the port changes.
+        # profile and runs `ufw allow wlanpi-mcp`; 8766/8767 are defined in
+        # /etc/wlanpi-mcp/ufw/wlanpi-mcp.rules, adjust there if the ports change.
         # In a chroot (image build) ufw isn't active, so defer to the first-boot
         # oneshot service instead of applying rules now.
         if ischroot; then

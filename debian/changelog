@@ -1,3 +1,19 @@
+wlanpi-mcp (0.6.9-1) unstable; urgency=medium
+
+  * Offer both SSE endpoints behind the nginx front: TLS on 8767 (preferred,
+    self-signed cert) and a plaintext fallback on 8766 for MCP harnesses that
+    cannot validate the self-signed cert (e.g. goose, which has no way to skip
+    cert verification). Both require the wlanpi-core Bearer JWT; on 8766 the
+    token crosses the LAN in cleartext, so that port is documented as a
+    trusted-network/development fallback and the trust-store path is called
+    out for harnesses that can support it.
+  * The uvicorn upstream moves from 8767 to 127.0.0.1:8768 so nginx can own
+    8767 for TLS. postinst chains the port migrations (8766->8768 and
+    8767->8768), UFW now opens 8766/tcp and 8767/tcp, and the install banner
+    lists both endpoints.
+
+ -- Josh Schmelzle <josh@joshschmelzle.com>  Thu, 17 Sep 2026 15:30:00 -0400
+
 wlanpi-mcp (0.6.8-1) unstable; urgency=medium
 
   * Security: front the SSE daemon with nginx so the wlanpi-core JWT no longer

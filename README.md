@@ -8,7 +8,7 @@ It is a thin bridge to the `wlanpi-core` REST API on the device (`https://localh
 
 Two transports:
 
-- **SSE (daemon mode)** - how the Debian package runs it under systemd: the uvicorn daemon binds loopback-only and an nginx site fronts it with the device's self-signed TLS on port `8766`. Remote MCP clients connect to `https://<wlanpi>:8766/sse`. Every connection **must** present a wlanpi-core JWT (see [Authentication](#authentication)).
+- **SSE (daemon mode)** - how the Debian package runs it under systemd: the uvicorn daemon binds loopback-only and an nginx site fronts it with two listeners. `https://<wlanpi>:8767/sse` terminates the device's self-signed TLS and is the preferred endpoint; `http://<wlanpi>:8766/sse` is a plaintext fallback for harnesses that cannot validate the self-signed cert (e.g. goose) - the JWT crosses the LAN in cleartext there, so prefer 8767 whenever the harness can be pointed at the cert. Every connection **must** present a wlanpi-core JWT on either port (see [Authentication](#authentication)).
 - **stdio** - the MCP client launches the server as a subprocess. Only useful when the client runs on the WLAN Pi itself.
 
 ## Installation on the WLAN Pi
@@ -19,7 +19,7 @@ Install the Debian package (depends on `wlanpi-core`):
 sudo apt install ./wlanpi-mcp_*.deb
 ```
 
-This installs to `/opt/wlanpi-mcp`, enables the `wlanpi-mcp` systemd service (SSE mode, fronted by nginx over TLS on port 8766), and reads configuration from `/etc/wlanpi-mcp/config.env` (see `install/etc/wlanpi-mcp/config.env.example`).
+This installs to `/opt/wlanpi-mcp`, enables the `wlanpi-mcp` systemd service (SSE mode, fronted by nginx: TLS on 8767, plaintext fallback on 8766), and reads configuration from `/etc/wlanpi-mcp/config.env` (see `install/etc/wlanpi-mcp/config.env.example`).
 
 To build the package from source: `dpkg-buildpackage -us -uc`.
 
@@ -57,7 +57,7 @@ The full flow, including the nginx `X-Real-IP` handling that makes on-box calls 
 On any machine that can reach the WLAN Pi:
 
 ```bash
-claude mcp add --transport sse wlanpi https://<wlanpi-ip>:8766/sse \
+claude mcp add --transport sse wlanpi https://<wlanpi-ip>:8767/sse \
   --header "Authorization: Bearer <your-wlanpi-core-jwt>"
 ```
 
@@ -93,7 +93,7 @@ Edit your Claude Desktop config file:
       "command": "npx",
       "args": [
         "-y", "mcp-remote",
-        "https://<wlanpi-ip>:8766/sse",
+        "https://<wlanpi-ip>:8767/sse",
         "--transport", "sse-only",
         "--header", "Authorization: Bearer ${WLANPI_TOKEN}"
       ],
@@ -107,7 +107,8 @@ Edit your Claude Desktop config file:
 
 Notes:
 
-- The SSE endpoint uses the same self-signed certificate as wlanpi-core, so your client must trust it (`/etc/nginx/ssl/self-signed-wlanpi.cert` on the device), or accept the cert warning. The JWT is encrypted in transit, not cleartext.
+- The TLS endpoint (8767) uses the same self-signed certificate as wlanpi-core, so your client must trust it (`/etc/nginx/ssl/self-signed-wlanpi.cert` on the device), or accept the cert warning. The JWT is encrypted in transit.
+- Harness cannot validate the self-signed cert and has no trust-store option (e.g. goose)? Use `http://<wlanpi-ip>:8766/sse` instead. That port is plaintext, so the JWT is sniffable on the LAN - use it only on a trusted network or during development, and add `self-signed-wlanpi.cert` to the harness's trust store when it can.
 - `--transport sse-only` skips mcp-remote's streamable-HTTP probe; this server speaks SSE.
 - The token is passed via the `env` block and interpolated into the header (`${WLANPI_TOKEN}`) - this sidesteps a known mcp-remote issue with spaces in `args` values on some platforms.
 
@@ -122,8 +123,8 @@ Settings load from the environment or `/etc/wlanpi-mcp/config.env`:
 | `WLANPI_CORE_URL` | `https://localhost:31415` | wlanpi-core API base URL |
 | `WLANPI_CORE_CA` | `/etc/nginx/ssl/self-signed-wlanpi.cert` | CA bundle for verifying wlanpi-core's TLS listener |
 | `WLANPI_CORE_TOKEN` | *(empty)* | Fallback JWT for **stdio mode only**; leave empty in SSE mode |
-| `WLANPI_MCP_HOST` | `127.0.0.1` | SSE bind host (loopback-only; nginx fronts the public 8766) |
-| `WLANPI_MCP_PORT` | `8767` | SSE bind port (loopback-only upstream) |
+| `WLANPI_MCP_HOST` | `127.0.0.1` | SSE bind host (loopback-only; nginx fronts the public 8766/8767) |
+| `WLANPI_MCP_PORT` | `8768` | SSE bind port (loopback-only upstream) |
 | `ALLOW_POWER_CONTROL` | `true` | Set `false` to disable the `reboot_device`/`shutdown_device` tools |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
@@ -145,7 +146,7 @@ Requires Python ≥ 3.13.
 pip install -e ".[testing]"
 pytest                                    # run tests
 python -m wlanpi_mcp --transport stdio    # run locally (stdio)
-python -m wlanpi_mcp --transport sse      # run locally (SSE on 127.0.0.1:8767; front with nginx for TLS)
+python -m wlanpi_mcp --transport sse      # run locally (SSE on 127.0.0.1:8768; front with nginx for 8766/8767)
 ```
 
 ## License
