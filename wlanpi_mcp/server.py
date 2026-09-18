@@ -38,10 +38,22 @@ def create_server(
         ),
         host=host,
         port=port,
-        # The SSE daemon binds loopback-only behind nginx, which forwards the
+        # Streamable HTTP, stateless, on /mcp. Stateless means every POST is a
+        # complete exchange with no server-side session: a client that
+        # reconnects after a daemon restart or an idle gap cannot strand
+        # itself on a stale session (the legacy SSE transport did exactly
+        # that with Claude Code, every tool call failing with -32602 until
+        # the client was restarted). Nothing here needs server-initiated
+        # messages, so nothing is lost. json_response returns each result as
+        # a plain JSON body instead of an SSE-wrapped stream, which keeps the
+        # nginx front and curl debugging simple.
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+        # The daemon binds loopback-only behind nginx, which forwards the
         # client's real Host header (e.g. 10.254.102.51:8767). FastMCP would
         # otherwise auto-enable DNS rebinding protection for a loopback bind
-        # and answer every /sse request with 421 Misdirected Request. The
+        # and answer every /mcp request with 421 Misdirected Request. The
         # Bearer JWT gate in middleware/bearer_token.py is what protects the
         # transport: a rebinding page in a browser cannot attach that header.
         transport_security=TransportSecuritySettings(

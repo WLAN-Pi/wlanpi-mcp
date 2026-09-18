@@ -10,12 +10,12 @@ case "$1" in
         mkdir -p "$CONFIG_DIR"
 
         # Write default config on first install. Auth is JWT passthrough:
-        # SSE clients send a wlanpi-core token as 'Authorization: Bearer'.
+        # MCP clients send a wlanpi-core token as 'Authorization: Bearer'.
         if [ ! -f "$CONFIG_FILE" ]; then
             cat > "$CONFIG_FILE" <<EOF
 WLANPI_CORE_URL=https://localhost:31415
 WLANPI_CORE_CA=/etc/nginx/ssl/self-signed-wlanpi.cert
-# Fallback wlanpi-core JWT for stdio transport only. In SSE/daemon mode leave
+# Fallback wlanpi-core JWT for stdio transport only. In HTTP/daemon mode leave
 # empty: clients must send their own token as 'Authorization: Bearer <token>'.
 WLANPI_CORE_TOKEN=
 WLANPI_MCP_HOST=127.0.0.1
@@ -29,8 +29,8 @@ EOF
             echo "  WLAN Pi MCP Server installed"
             echo "  Clients authenticate with a wlanpi-core JWT:"
             echo "  POST https://<device>:31415/api/v1/auth/token"
-            echo "  Then connect to https://<device>:8767/sse (TLS)"
-            echo "  or http://<device>:8766/sse (plaintext fallback)"
+            echo "  Then connect to https://<device>:8767/mcp (TLS)"
+            echo "  or http://<device>:8766/mcp (plaintext fallback)"
             echo "============================================================"
             echo ""
         else
@@ -40,7 +40,7 @@ EOF
             if ! grep -q '^WLANPI_CORE_CA=' "$CONFIG_FILE"; then
                 echo 'WLANPI_CORE_CA=/etc/nginx/ssl/self-signed-wlanpi.cert' >> "$CONFIG_FILE"
             fi
-            # Upgrade: the SSE daemon is fronted by nginx (TLS on 8767,
+            # Upgrade: the daemon is fronted by nginx (TLS on 8767,
             # plaintext fallback on 8766). It must bind loopback-only, or its
             # port collides with nginx's listeners (EADDRINUSE) and the service
             # fails to start. Chain the migrations so a device on any prior
@@ -53,7 +53,7 @@ EOF
         chmod 640 "$CONFIG_FILE"
         chown root:wlanpi "$CONFIG_FILE" 2>/dev/null || true
 
-        # Open the SSE ports in UFW via the shipped application profile
+        # Open the MCP ports in UFW via the shipped application profile
         # (/etc/ufw/applications.d/wlanpi-mcp). The setup script installs the
         # profile and runs `ufw allow wlanpi-mcp`; 8766/8767 are defined in
         # /etc/wlanpi-mcp/ufw/wlanpi-mcp.rules, adjust there if the ports change.

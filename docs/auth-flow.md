@@ -6,8 +6,9 @@ where core validates it. This document traces the token end to end, including th
 `X-Real-IP` override that lets on-box (loopback) calls reach core's JWT validator instead
 of its localhost HMAC path.
 
-The MCP SSE endpoint is fronted by an MCP-owned nginx site: the uvicorn daemon
-binds loopback-only (127.0.0.1:8768) and nginx exposes two listeners. `8767`
+The MCP endpoint (`/mcp`, streamable HTTP, stateless) is fronted by an MCP-owned
+nginx site: the uvicorn daemon binds loopback-only (127.0.0.1:8768) and nginx
+exposes two listeners. `8767`
 terminates the device's self-signed TLS and is the preferred endpoint; `8766`
 is a plaintext fallback for harnesses that cannot validate the self-signed
 cert (e.g. goose), where the JWT crosses the LAN in cleartext. Use 8767
@@ -27,20 +28,16 @@ sequenceDiagram
 
     Note over CD,MR: User holds ONE wlanpi-core JWT
     CD->>MR: launch w/ Authorization: Bearer <JWT>
-    MR->>MG: GET /sse (TLS on 8767)<br/>Authorization: Bearer <JWT>
-    MG->>MW: proxy_pass → 127.0.0.1:8768/sse
+    Note over CD,CC: every MCP call is one POST - stateless, no server-side session
+    CD->>MR: CallTool (e.g. scan_wlan)
+    MR->>MG: POST /mcp (TLS on 8767)<br/>Authorization: Bearer <JWT>
+    MG->>MW: proxy_pass → 127.0.0.1:8768/mcp
     alt no / non-Bearer token
-        MW-->>MR: 401 (reject tokenless connection)
+        MW-->>MR: 401 (reject tokenless request)
     else Bearer present
-        MW->>MW: stash JWT in contextvar
-        MW->>MW: bind session to sha256(JWT) via scope["user"]
+        MW->>MW: stash JWT in contextvar<br/>publish sha256(JWT) principal on scope["user"]
+        MW->>CC: dispatch tool → CoreClient.get(...)<br/>token read off this request (get_token)
     end
-
-    Note over CD,CC: later - a tool call (e.g. scan_wlan)
-    CD->>MR: CallTool
-    MR->>MG: POST /messages/ (TLS)
-    MG->>MW: proxy_pass → 127.0.0.1:8768/messages/
-    MW->>CC: dispatch tool → CoreClient.get(...)
     CC->>NG: GET /api/v1/... over localhost<br/>Authorization: Bearer <JWT><br/>X-Wlanpi-Client: mcp
     NG->>NG: map X-Wlanpi-Client=="mcp"<br/>⇒ X-Real-IP = 192.0.2.1 (non-loopback)
     NG->>API: proxy_pass unix:/run/wlanpi_core.sock<br/>X-Real-IP: 192.0.2.1 + Bearer JWT
@@ -78,7 +75,7 @@ flowchart LR
 | Hop | Carries | Auth decision |
 |---|---|---|
 | Claude Desktop → mcp-remote | `Authorization: Bearer <JWT>` | none - just transport |
-| mcp-remote → MCP nginx front (`:8767` TLS) | same Bearer on the `/sse` connection and each `/messages/` POST | **nginx:** TLS termination with the self-signed cert; the JWT is encrypted in transit. (`:8766` is the plaintext fallback - same Bearer, but cleartext, for harnesses that cannot validate the cert) |
+| mcp-remote → MCP nginx front (`:8767` TLS) | the same Bearer on every `/mcp` POST | **nginx:** TLS termination with the self-signed cert; the JWT is encrypted in transit. (`:8766` is the plaintext fallback - same Bearer, but cleartext, for harnesses that cannot validate the cert) |
 | MCP nginx front → MCP middleware | same Bearer, forwarded to `127.0.0.1:8768` | **MCP:** reject if no Bearer (401); else stash JWT in contextvar |
 | MCP CoreClient → core nginx | `Bearer <JWT>` + **`X-Wlanpi-Client: mcp`** | none yet - MCP never validates |
 | core nginx → core (unix socket) | rewrites **`X-Real-IP` → `192.0.2.1`** because of the tag | **nginx:** selects which origin core sees |
@@ -101,25 +98,37 @@ opt *into* the stricter, JWT-required scheme - the token is still validated (sig
 expiry, revocation) by core. A caller that sends the tag without a valid JWT gets 401, so
 the tag can never bypass authentication, only demand more of the caller.
 
-## Session binding: one token per SSE session
+## One token per request: the stateless transport
 
-SSE splits a session across two request types: the long-lived `GET /sse` connection (which
-carries the token and in whose task tree tools actually execute) and short `POST /messages/`
-requests that deliver each JSON-RPC call by `session_id`. Without extra care, a caller who
-learns another user's `session_id` could POST tool calls into that user's authenticated
-session - the calls would run with the victim's token.
+The daemon serves streamable HTTP in stateless mode (`stateless_http=True` in
+`create_server`). There is no server-side MCP session: every `POST /mcp` is a complete
+exchange, handled by a server instance created for that request and torn down after it.
+Two consequences:
 
-To prevent this, `BearerTokenMiddleware` publishes a principal on `scope["user"]` keyed by
-`sha256(token)`. The MCP SSE transport records that principal as the session owner at
-connect time and rejects any later `POST /messages/` whose principal differs, responding
-with the same `404` as a nonexistent session (`mcp/server/sse.py`). Effect:
+- **The token that reaches wlanpi-core is the Bearer on that very request.** The transport
+  binds the Starlette request to the MCP call, and `get_token()`
+  (`wlanpi_mcp/auth/token_context.py`) reads the `Authorization` header off it, falling
+  back to the contextvar the middleware set. Tool calls run in a task the SDK's session
+  manager spawns, so reading the request itself rather than relying on contextvar
+  inheritance is what makes this robust.
+- **There is no session for another caller to inject into.** Under the legacy SSE
+  transport a session spanned a long-lived `GET /sse` plus per-call `POST /messages/`
+  requests routed by `session_id`, and the server had to bind each session to the token
+  that opened it. With nothing shared between requests, that attack surface is gone.
 
-- A message must carry the **same token** that opened the session, or it is refused.
-- The token is not parsed or validated here (that stays wlanpi-core's job); the fingerprint
-  only needs to be stable and unique per token, so a raw SHA-256 suffices and keeps the
-  token itself off the principal object.
+`BearerTokenMiddleware` still publishes a principal on `scope["user"]` keyed by
+`sha256(token)`. The SDK's streamable HTTP session manager binds sessions to that
+principal and refuses a mismatched request with the same `404` as a nonexistent session,
+so the per-token binding is in place should stateful mode ever be enabled. The token is
+not parsed or validated here (that stays wlanpi-core's job); the fingerprint only needs to
+be stable and unique per token, so a raw SHA-256 suffices and keeps the token itself off
+the principal object.
 
-This closes blind cross-session injection on a trusted network. Transport
+Why stateless: the legacy SSE transport stranded Claude Code after any reconnect (daemon
+restart, idle gap). The client re-opened the stream without re-sending `initialize`, and
+the server answered every later tool call with `-32602 Invalid request parameters`
+(python-sdk issue #2579, closed as not planned). A stateless server has no handshake
+state to lose. Transport
 encryption is a separate control and is provided by the MCP nginx front:
 nginx terminates TLS on 8767 (self-signed cert) in front of the loopback-only
 daemon, so the token never crosses the wire in cleartext on the preferred

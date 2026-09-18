@@ -77,8 +77,10 @@ class FileCapture:
         out = {
             # capture_id is the handle callers pass back to fetch/stop. It is
             # core's session id, but not named 'session_id' on purpose: that
-            # name collides with the MCP SSE transport's reserved routing query
-            # param and some clients drop a tool arg that shares it.
+            # name collided with the legacy MCP SSE transport's reserved
+            # routing query param and some clients dropped a tool arg sharing
+            # it. Streamable HTTP carries its session in a header, but the
+            # name and the alias stay for existing callers.
             "capture_id": self.session_id,
             "session_id": self.session_id,
             "interface": self.interface,

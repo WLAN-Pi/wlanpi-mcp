@@ -21,4 +21,4 @@ Description: WLAN Pi MCP Server
  WLAN Pi capabilities to AI assistants and MCP-compatible clients.
  .
  Supports both stdio transport (for direct Claude Desktop integration via SSH)
- and SSE/HTTP transport (for LAN-accessible daemon mode).
+ and streamable HTTP transport (for LAN-accessible daemon mode).

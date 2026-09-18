@@ -1,3 +1,22 @@
+wlanpi-mcp (0.6.11-1) unstable; urgency=medium
+
+  * Replace the legacy SSE transport with stateless streamable HTTP on /mcp.
+    Claude Code re-opened a dropped SSE stream (daemon restart, idle gap)
+    without re-sending initialize, and the MCP SDK then answered every tool
+    call on that session with -32602 Invalid request parameters until the
+    client was restarted (python-sdk issue #2579, closed as not planned).
+    Stateless mode has no server-side session to strand on: every POST /mcp
+    is a complete exchange. Responses are plain JSON (json_response), so the
+    nginx front needs no long-lived stream and curl debugging is simple.
+  * Token passthrough now reads the Bearer off the request the transport binds
+    to each MCP call (get_token), with the middleware contextvar as fallback,
+    so the token reaching wlanpi-core is always the one on that request.
+  * /sse is no longer served. Clients change the path to /mcp and the
+    transport to http (Claude Code: --transport http; mcp-remote:
+    --transport http-only). nginx site, systemd unit and docs updated.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 18 Sep 2026 15:30:00 +0000
+
 wlanpi-mcp (0.6.10-1) unstable; urgency=medium
 
   * Fix SSE connections through the nginx front failing with 421 Misdirected
