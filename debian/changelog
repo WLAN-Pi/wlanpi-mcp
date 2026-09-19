@@ -1,3 +1,14 @@
+wlanpi-mcp (0.6.13-1) unstable; urgency=medium
+
+  * Add a regression test guarding get_token()'s transport-bound request token
+    path: the assembled /mcp app runs without the middleware and with the
+    contextvar poisoned, so the Authorization header off the request the
+    streamable HTTP transport binds to the call is the only token source.
+  * Correct the systemd unit path in CLAUDE.md (debian/wlanpi-mcp.service, not
+    install/lib/systemd/system) and drop the AGENTS.md newline-only change.
+
+ -- Josh Schmelzle <josh@joshschmelzle.com>  Fri, 18 Sep 2026 18:05:00 -0400
+
 wlanpi-mcp (0.6.12-1) unstable; urgency=medium
 
   * Replace the legacy SSE transport with stateless streamable HTTP on /mcp.
