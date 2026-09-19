@@ -1,10 +1,12 @@
-"""Regression guards for the assembled SSE app as nginx presents it."""
+"""Regression guards for the assembled streamable HTTP app as nginx presents it."""
 
-import uuid
+from contextlib import asynccontextmanager
 
 import httpx
 import pytest
+import respx
 
+from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
 from wlanpi_mcp.server import create_server
 
@@ -17,80 +19,150 @@ FORWARDED_HEADERS = [
     {"Host": "wlanpi-9be.local:8767"},
 ]
 
+# The streamable HTTP transport refuses a POST without both media types in
+# Accept (406), whatever the response mode.
+MCP_HEADERS = {
+    "Accept": "application/json, text/event-stream",
+    "Content-Type": "application/json",
+}
+
+DEVICE_INFO_URL = "https://localhost:31415/api/v1/system/device/info"
+
+
+def _initialize(request_id: int = 1) -> dict:
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0"},
+        },
+    }
+
+
+def _call_tool(name: str, request_id: int = 2) -> dict:
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": "tools/call",
+        "params": {"name": name, "arguments": {}},
+    }
+
 
 @pytest.fixture
-def sse_app(client):
-    mcp = create_server(client, host="127.0.0.1", port=8768)
-    app = mcp.sse_app()
+def core(settings):
+    # Deliberately not the conftest `client` fixture: that one pre-sets the
+    # token contextvar, which would mask whether the token really travels
+    # from the HTTP header into the tool call.
+    return CoreClient(settings)
+
+
+@pytest.fixture
+def mcp(core):
+    return create_server(core, host="127.0.0.1", port=8768)
+
+
+@asynccontextmanager
+async def _serve(mcp):
+    """Yield an httpx client bound to the assembled app, with its lifespan running.
+
+    httpx's ASGITransport does not run the app lifespan, which is where the
+    session manager starts the task group every request is served from. This
+    is a context manager rather than an async fixture because the manager's
+    task group must be entered and exited in the same task, and pytest-asyncio
+    tears async-generator fixtures down elsewhere.
+    """
+    app = mcp.streamable_http_app()
     app.add_middleware(BearerTokenMiddleware)
-    return app
+    transport = httpx.ASGITransport(app=app)
+    async with mcp.session_manager.run():
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://127.0.0.1:8768"
+        ) as http:
+            yield http
 
 
-@pytest.fixture
-def http(sse_app):
-    transport = httpx.ASGITransport(app=sse_app)
-    return httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:8768")
-
-
-def test_dns_rebinding_protection_is_off_for_loopback_bind(client):
+def test_dns_rebinding_protection_is_off_for_loopback_bind(mcp):
     # FastMCP flips this on automatically for host=127.0.0.1; the nginx front
     # forwards LAN Host headers, so it must stay off (the Bearer gate is the
     # protection).
-    mcp = create_server(client, host="127.0.0.1", port=8768)
     security = mcp.settings.transport_security
     assert security is not None
     assert security.enable_dns_rebinding_protection is False
 
 
+def test_transport_is_stateless_json_on_mcp_path(mcp):
+    # Stateless is the point of the move: no server-side session for a
+    # reconnecting client to strand on. JSON responses keep nginx/curl simple.
+    assert mcp.settings.streamable_http_path == "/mcp"
+    assert mcp.settings.stateless_http is True
+    assert mcp.settings.json_response is True
+
+
 @pytest.mark.parametrize("headers", FORWARDED_HEADERS)
-async def test_messages_accepts_forwarded_lan_host(http, headers):
-    response = await http.post(
-        f"/messages/?session_id={uuid.uuid4().hex}",
-        json={},
-        headers={"Authorization": "Bearer core.jwt.abc123", **headers},
+async def test_mcp_accepts_forwarded_lan_host(mcp, headers):
+    async with _serve(mcp) as http:
+        response = await http.post(
+            "/mcp",
+            json=_initialize(),
+            headers={
+                "Authorization": "Bearer core.jwt.abc123",
+                **MCP_HEADERS,
+                **headers,
+            },
+        )
+    # 421/403 mean the Host/Origin check fired.
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["serverInfo"]["name"] == "WLAN Pi"
+
+
+async def test_mcp_rejects_missing_bearer(mcp):
+    async with _serve(mcp) as http:
+        response = await http.post("/mcp", json=_initialize(), headers=MCP_HEADERS)
+    assert response.status_code == 401
+
+
+@respx.mock
+async def test_tool_call_without_initialize_forwards_bearer(mcp):
+    # The failure that forced the move off SSE: a client that reconnected
+    # without re-sending initialize had every tools/call answered -32602.
+    # Stateless mode has no handshake to miss, and the call's own Bearer is
+    # what reaches wlanpi-core.
+    route = respx.get(DEVICE_INFO_URL).mock(
+        return_value=httpx.Response(200, json={"hostname": "wlanpi-9be"})
     )
-    # The request must reach the transport: 404 is "unknown session", which
-    # is the expected answer here. 421/403 mean the Host/Origin check fired.
-    assert response.status_code == 404, response.text
+    async with _serve(mcp) as http:
+        response = await http.post(
+            "/mcp",
+            json=_call_tool("get_device_info"),
+            headers={"Authorization": "Bearer core.jwt.abc123", **MCP_HEADERS},
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "error" not in body, body
+    assert body["result"]["isError"] is False
+    assert body["result"]["structuredContent"] == {"hostname": "wlanpi-9be"}
+    assert route.call_count == 1
+    assert route.calls[0].request.headers["Authorization"] == "Bearer core.jwt.abc123"
 
 
-@pytest.mark.parametrize("headers", FORWARDED_HEADERS)
-async def test_sse_accepts_forwarded_lan_host(sse_app, headers):
-    # GET /sse is a never-ending stream, so drive the ASGI app directly and
-    # capture the response status, then disconnect.
-    scope = {
-        "type": "http",
-        "asgi": {"version": "3.0"},
-        "http_version": "1.1",
-        "method": "GET",
-        "scheme": "http",
-        "path": "/sse",
-        "raw_path": b"/sse",
-        "root_path": "",
-        "query_string": b"",
-        "headers": [
-            (k.lower().encode(), v.encode())
-            for k, v in {"Authorization": "Bearer core.jwt.abc123", **headers}.items()
-        ],
-        "client": ("127.0.0.1", 12345),
-        "server": ("127.0.0.1", 8768),
-    }
-    status: list[int] = []
-
-    async def receive():
-        return {"type": "http.disconnect"}
-
-    async def send(message):
-        if message["type"] == "http.response.start":
-            status.append(message["status"])
-
-    try:
-        await sse_app(scope, receive, send)
-    except ValueError:
-        # The SDK raises "Request validation failed" after sending a 421; the
-        # status assertion below is the finding, not this exception.
-        pass
-
-    # The SDK also emits a trailing empty Response() once the stream closes on
-    # disconnect; only the first response start is the stream's status.
-    assert status[:1] == [200], status
+@respx.mock
+async def test_each_request_carries_its_own_token(mcp):
+    # Stateless replacement for the SSE session binding: with no session to
+    # share, a request can only ever run with the token it carried itself.
+    route = respx.get(DEVICE_INFO_URL).mock(
+        return_value=httpx.Response(200, json={"hostname": "wlanpi-9be"})
+    )
+    async with _serve(mcp) as http:
+        for token in ("token-A", "token-B", "token-A"):
+            response = await http.post(
+                "/mcp",
+                json=_call_tool("get_device_info"),
+                headers={"Authorization": f"Bearer {token}", **MCP_HEADERS},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["result"]["isError"] is False
+    seen = [call.request.headers["Authorization"] for call in route.calls]
+    assert seen == ["Bearer token-A", "Bearer token-B", "Bearer token-A"]

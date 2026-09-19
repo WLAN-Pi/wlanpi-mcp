@@ -25,20 +25,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--transport",
-        choices=["stdio", "sse"],
+        choices=["stdio", "streamable-http"],
         default="stdio",
-        help="MCP transport: stdio (for direct client invocation) or sse (HTTP daemon mode)",
+        help=(
+            "MCP transport: stdio (for direct client invocation) or "
+            "streamable-http (HTTP daemon mode, stateless, on /mcp)"
+        ),
     )
     parser.add_argument(
         "--host",
         default=None,
-        help="Bind host for SSE transport (overrides config)",
+        help="Bind host for the HTTP transport (overrides config)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=None,
-        help="Bind port for SSE transport (overrides config)",
+        help="Bind port for the HTTP transport (overrides config)",
     )
     args = parser.parse_args()
 
@@ -57,22 +60,23 @@ def main() -> None:
     if args.transport == "stdio":
         mcp.run(transport="stdio")
     else:
-        _run_sse(mcp, settings, host, port)
+        _run_http(mcp, settings, host, port)
 
 
-def _run_sse(mcp: FastMCP, settings: Settings, host: str, port: int) -> None:
+def _run_http(mcp: FastMCP, settings: Settings, host: str, port: int) -> None:
     import uvicorn
 
     from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
 
-    # FastMCP exposes the Starlette ASGI app for SSE via sse_app().
-    # Every connection must present a wlanpi-core JWT, which is passed
-    # through to wlanpi-core on API calls (validated there, not here).
-    sse_app = mcp.sse_app()
-    sse_app.add_middleware(BearerTokenMiddleware)
+    # FastMCP exposes the Starlette ASGI app for streamable HTTP via
+    # streamable_http_app(); its lifespan runs the session manager, which
+    # uvicorn drives. Every request must present a wlanpi-core JWT, which is
+    # passed through to wlanpi-core on API calls (validated there, not here).
+    http_app = mcp.streamable_http_app()
+    http_app.add_middleware(BearerTokenMiddleware)
 
     uvicorn.run(
-        sse_app,
+        http_app,
         host=host,
         port=port,
         log_level=settings.LOG_LEVEL.lower(),

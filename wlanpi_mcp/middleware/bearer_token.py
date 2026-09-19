@@ -16,13 +16,14 @@ def _principal_for(token: str) -> AuthenticatedUser:
     """
     Represent the connecting token as an ASGI principal.
 
-    The principal is keyed by a fingerprint of the token itself. The MCP SSE
-    transport binds each session to the principal on scope["user"] at connect
-    time and rejects any later POST /messages/ whose principal differs
-    (mcp/server/sse.py). By keying the principal on a SHA-256 of the raw token,
-    that binding rejects any message carrying a different token than the one
-    that opened the session — so one client's session cannot be driven with
-    another client's (or an unauthenticated) credential.
+    The principal is keyed by a fingerprint of the token itself. The MCP
+    streamable HTTP session manager binds a session to the principal on
+    scope["user"] when the session is created and rejects any later request
+    on that session whose principal differs (mcp/server/streamable_http_manager.py).
+    The daemon runs the transport stateless, so there are no sessions to bind
+    and every request stands alone with its own token; the principal is still
+    published so that property holds unchanged if stateful mode is ever turned
+    on.
 
     We hash rather than parse the JWT: this middleware never validates tokens
     (that is wlanpi-core's job), and the fingerprint only needs to be stable
@@ -45,12 +46,15 @@ class BearerTokenMiddleware:
     client as a tool error.
 
     Pure ASGI middleware (not BaseHTTPMiddleware) so the downstream app runs
-    in the same task: the contextvar set here is visible to the SSE session
-    loop and every tool-call task it spawns.
+    in the same task. The streamable HTTP transport starts the per-request
+    MCP server task from inside this request, so the contextvar set here is
+    inherited by that task. The primary token source is nonetheless the
+    request itself: get_token() reads the Authorization header off the
+    Starlette request that the transport binds to each MCP call.
 
-    It also publishes a per-token principal on scope["user"] so the SSE
-    transport binds each session to its opening token and refuses messages
-    presenting a different one (see _principal_for).
+    It also publishes a per-token principal on scope["user"] so a stateful
+    session manager would bind each session to its opening token (see
+    _principal_for).
     """
 
     def __init__(self, app: ASGIApp) -> None:

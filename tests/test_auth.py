@@ -1,14 +1,11 @@
 import hashlib
-import uuid
 
 import httpx
 import pytest
-from mcp.server.auth.middleware.bearer_auth import (
-    AuthenticatedUser,
-    authorization_context,
-)
-from mcp.server.sse import SseServerTransport
+from mcp.server.lowlevel.server import request_ctx
+from mcp.shared.context import RequestContext
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
@@ -76,61 +73,62 @@ async def test_publishes_token_fingerprint_principal(http):
     assert response.json()["client_id"] == expected
 
 
-def _principal(token: str) -> AuthenticatedUser:
-    # Mirror what BearerTokenMiddleware publishes for a given token.
-    from wlanpi_mcp.middleware.bearer_token import _principal_for
-
-    return _principal_for(token)
-
-
-async def _post_message(transport, session_id, principal, body=b"{}"):
-    """Drive SseServerTransport.handle_post_message and return the HTTP status."""
-    sent = []
-
-    async def receive():
-        return {"type": "http.request", "body": body, "more_body": False}
-
-    async def send(message):
-        sent.append(message)
-
-    scope = {
-        "type": "http",
-        "method": "POST",
-        "path": "/messages/",
-        "headers": [(b"host", b"testserver"), (b"content-type", b"application/json")],
-        "query_string": f"session_id={session_id.hex}".encode(),
-        "user": principal,
-    }
-    await transport.handle_post_message(scope, receive, send)
-    start = next(m for m in sent if m["type"] == "http.response.start")
-    return start["status"]
+# --- get_token(): the MCP request context is the primary source -------------
+#
+# The streamable HTTP transport binds the Starlette request to every MCP call
+# and the server exposes it via request_ctx while a handler runs. Tool calls
+# run in a task the session manager spawns, so the header on that request,
+# not the middleware's contextvar, is the authoritative token for the call.
 
 
-async def test_sse_session_rejects_mismatched_token():
-    """A message carrying a different token than opened the session is refused."""
-    transport = SseServerTransport("/messages/")
-    session_id = uuid.uuid4()
-    # Simulate an established session owned by token A.
-    received = []
-
-    class _Writer:
-        async def send(self, item):
-            received.append(item)
-
-    transport._read_stream_writers[session_id] = _Writer()
-    transport._session_owners[session_id] = authorization_context(_principal("token-A"))
-
-    # Token B cannot drive token A's session: same 404 as a nonexistent session.
-    status_b = await _post_message(transport, session_id, _principal("token-B"))
-    assert status_b == 404
-    assert received == []
-
-    # Token A (the opener) is accepted and its message is delivered.
-    status_a = await _post_message(
-        transport,
-        session_id,
-        _principal("token-A"),
-        body=b'{"jsonrpc":"2.0","id":1,"method":"ping"}',
+def _bind_request(authorization: str | None):
+    headers = []
+    if authorization is not None:
+        headers.append((b"authorization", authorization.encode()))
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/mcp",
+            "headers": headers,
+            "query_string": b"",
+        }
     )
-    assert status_a == 202
-    assert len(received) == 1
+    ctx = RequestContext(
+        request_id=1, meta=None, session=None, lifespan_context=None, request=request
+    )
+    return request_ctx.set(ctx)
+
+
+def test_get_token_reads_bearer_from_request_context():
+    reset = _bind_request("Bearer core.jwt.fromreq")
+    try:
+        assert get_token() == "core.jwt.fromreq"
+    finally:
+        request_ctx.reset(reset)
+
+
+def test_request_context_wins_over_inherited_contextvar():
+    # A stale inherited contextvar must never outrank the header that carried
+    # the call being handled.
+    ctx = current_token.set("core.jwt.inherited")
+    reset = _bind_request("Bearer core.jwt.fromreq")
+    try:
+        assert get_token() == "core.jwt.fromreq"
+    finally:
+        request_ctx.reset(reset)
+        current_token.reset(ctx)
+
+
+def test_get_token_falls_back_to_contextvar_without_bearer_on_request():
+    ctx = current_token.set("core.jwt.inherited")
+    reset = _bind_request(None)
+    try:
+        assert get_token() == "core.jwt.inherited"
+    finally:
+        request_ctx.reset(reset)
+        current_token.reset(ctx)
+
+
+def test_get_token_is_none_outside_any_request():
+    assert get_token() is None

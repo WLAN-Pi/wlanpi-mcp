@@ -7,7 +7,7 @@ case "$1" in
     ;;
 
     remove)
-        # Close the SSE port and remove the UFW application profile that the
+        # Close the MCP ports and remove the UFW application profile that the
         # setup script installed into /etc/ufw/applications.d (not dpkg-owned,
         # so we clean it up here). Delete the rule before removing the profile
         # so ufw can still resolve the 'wlanpi-mcp' name.

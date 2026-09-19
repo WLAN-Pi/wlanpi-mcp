@@ -94,7 +94,7 @@ class CoreClient:
         if not token:
             raise RuntimeError(
                 "No wlanpi-core token available. Connect with "
-                "'Authorization: Bearer <token>' (SSE) or set WLANPI_CORE_TOKEN "
+                "'Authorization: Bearer <token>' (HTTP) or set WLANPI_CORE_TOKEN "
                 "(stdio). Tokens are issued by wlanpi-core at /api/v1/auth/token."
             )
         return token
