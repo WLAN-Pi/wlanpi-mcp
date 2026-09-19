@@ -59,4 +59,4 @@ Tools return error dicts (`{"error": "..."}`) rather than raising, so the LLM cl
 
 ## Deployment
 
-Ships as a Debian package (`debian/`) built with dh-virtualenv into `/opt/wlanpi-mcp`, depends on `wlanpi-core`, and runs as the `wlanpi` user via the systemd unit in `install/lib/systemd/system/wlanpi-mcp.service` (streamable HTTP transport, config from `/etc/wlanpi-mcp/config.env`, example in `install/etc/wlanpi-mcp/config.env.example`).
+Ships as a Debian package (`debian/`) built with dh-virtualenv into `/opt/wlanpi-mcp`, depends on `wlanpi-core`, and runs as the `wlanpi` user via the systemd unit in `debian/wlanpi-mcp.service` (streamable HTTP transport, config from `/etc/wlanpi-mcp/config.env`, example in `install/etc/wlanpi-mcp/config.env.example`).
