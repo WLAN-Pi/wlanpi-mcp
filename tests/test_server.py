@@ -65,7 +65,7 @@ def mcp(core):
 
 
 @asynccontextmanager
-async def _serve(mcp):
+async def _serve(mcp, *, with_middleware: bool = True):
     """Yield an httpx client bound to the assembled app, with its lifespan running.
 
     httpx's ASGITransport does not run the app lifespan, which is where the
@@ -73,9 +73,14 @@ async def _serve(mcp):
     is a context manager rather than an async fixture because the manager's
     task group must be entered and exited in the same task, and pytest-asyncio
     tears async-generator fixtures down elsewhere.
+
+    Pass with_middleware=False to omit BearerTokenMiddleware, so the contextvar
+    it would set stays untouched and get_token() has only the transport-bound
+    request to read from.
     """
     app = mcp.streamable_http_app()
-    app.add_middleware(BearerTokenMiddleware)
+    if with_middleware:
+        app.add_middleware(BearerTokenMiddleware)
     transport = httpx.ASGITransport(app=app)
     async with mcp.session_manager.run():
         async with httpx.AsyncClient(
@@ -166,3 +171,34 @@ async def test_each_request_carries_its_own_token(mcp):
             assert response.json()["result"]["isError"] is False
     seen = [call.request.headers["Authorization"] for call in route.calls]
     assert seen == ["Bearer token-A", "Bearer token-B", "Bearer token-A"]
+
+
+@respx.mock
+async def test_transport_populates_request_header_token(mcp):
+    # get_token() reads the Authorization header off the Starlette request the
+    # streamable HTTP transport binds to each MCP call (the SDK's request_ctx).
+    # The middleware path would set the same token on the contextvar, so it
+    # cannot distinguish the two. Run the app WITHOUT the middleware and poison
+    # the contextvar with a decoy: only a transport-bound request can supply the
+    # real token, so this fails if the SDK ever stops populating request_ctx.
+    from wlanpi_mcp.auth.token_context import current_token
+
+    route = respx.get(DEVICE_INFO_URL).mock(
+        return_value=httpx.Response(200, json={"hostname": "wlanpi-9be"})
+    )
+    reset = current_token.set("decoy.contextvar.token")
+    try:
+        async with _serve(mcp, with_middleware=False) as http:
+            response = await http.post(
+                "/mcp",
+                json=_call_tool("get_device_info"),
+                headers={"Authorization": "Bearer header.token", **MCP_HEADERS},
+            )
+        assert response.status_code == 200, response.text
+        assert response.json()["result"]["isError"] is False
+        # The decoy contextvar is still set, so only a transport-bound request
+        # could have produced the real token; core saw the header, not the decoy.
+        assert route.call_count == 1
+        assert route.calls[0].request.headers["Authorization"] == "Bearer header.token"
+    finally:
+        current_token.reset(reset)
