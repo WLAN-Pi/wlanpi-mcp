@@ -37,6 +37,14 @@ fi
 
 IMAGE="wlanpi-mcp-builder:${SUITE}"
 
+# Clean up old build manifest, stale build trees, and previously built
+# packages. Without this, setuptools reuses build/lib and repackages files that
+# were deleted or renamed in the source tree, and stale .deb files in the repo
+# root get picked up by the manifest and deployed.
+rm -f .build-manifest.txt
+rm -rf build .pybuild
+rm -f wlanpi-mcp*.deb
+
 echo "========================================="
 echo "Building wlanpi-mcp Debian Package"
 echo "  engine: $ENGINE"
@@ -69,6 +77,13 @@ dpkg-buildpackage -us -uc -b
 echo ""
 echo "Copying packages from container to host..."
 cp -v /*.deb /work/ 2>/dev/null || echo "No .deb files found in container root"
+
+echo ""
+echo "Creating build manifest..."
+# List only the packages built in this run. The container root holds just the
+# output of this build; globbing /work would also match stale .deb files from
+# earlier builds and deploy the wrong version.
+ls -1 /*.deb 2>/dev/null | grep -v dbgsym | xargs -r -n1 basename > /work/.build-manifest.txt || true
 
 echo ""
 echo "Build complete!"
