@@ -4,12 +4,13 @@ from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the profiler control tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_profiler_status() -> dict[str, Any]:
         """
         Get the current status of the wlanpi-profiler.
@@ -19,7 +20,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/profiler/status")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def start_profiler(
         interface: str | None = None,
         channel: int | None = None,
@@ -78,7 +79,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
         return await client.post("/api/v1/profiler/start", json=body)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def stop_profiler() -> dict[str, Any]:
         """Stop the wlanpi-profiler and return summary results."""
         return await client.post("/api/v1/profiler/stop")

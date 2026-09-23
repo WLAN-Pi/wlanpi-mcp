@@ -22,7 +22,7 @@ async def _cached_get(client: CoreClient, path: str, ttl: float) -> Any:
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
-    """Register the network config list and status resources."""
+    """Register the network config list, status and leftovers resources."""
 
     @mcp.resource("netconfig://list")
     async def netconfig_list() -> str:
@@ -34,4 +34,10 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     async def netconfig_status() -> str:
         """Status of the currently active network configuration profile."""
         data = await _cached_get(client, "/api/v1/network/config/status", ttl=15.0)
+        return json.dumps(data, indent=2)
+
+    @mcp.resource("netconfig://leftovers")
+    async def netconfig_leftovers() -> str:
+        """Namespaces holding radios that Core left alone (another tool's, or Core's own that could not be removed)."""
+        data = await _cached_get(client, "/api/v1/network/config/leftovers", ttl=15.0)
         return json.dumps(data, indent=2)

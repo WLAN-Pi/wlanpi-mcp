@@ -4,12 +4,13 @@ from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the VLAN management tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_vlans(
         interface: str | None = None,
         vlan_id: int | None = None,
@@ -28,7 +29,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             path = f"/api/v1/network/ethernet/{iface}/vlan"
         return await client.get(path)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def create_vlan(
         interface: str,
         vlan_id: int,
@@ -50,7 +51,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             json=body,
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def delete_vlan(
         interface: str,
         vlan_id: int,

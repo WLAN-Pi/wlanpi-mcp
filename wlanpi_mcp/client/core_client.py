@@ -1,5 +1,6 @@
 """Async HTTP client for the wlanpi-core API, forwarding the client's JWT."""
 
+import json
 import logging
 import ssl
 from pathlib import Path
@@ -13,6 +14,46 @@ from wlanpi_mcp.config import Settings
 log = logging.getLogger(__name__)
 
 _client: Optional["CoreClient"] = None
+
+#: Cap on a non-JSON error body quoted back (e.g. an nginx HTML error page).
+_MAX_TEXT_DETAIL = 500
+
+
+class CoreAPIError(httpx.HTTPStatusError):
+    """
+    A non-2xx response from wlanpi-core, with core's error detail intact.
+
+    Subclasses HTTPStatusError so existing handlers still match. ``detail`` is
+    FastAPI's ``detail`` as sent (a string or an object such as
+    ``{"message", "outcomes"}``), else the whole JSON body, else the plain-text
+    body (some deprecated routes return text). The message carries the status
+    and detail, so the tool error the MCP client sees says what core said.
+    """
+
+    def __init__(self, response: httpx.Response) -> None:
+        self.status_code = response.status_code
+        self.detail = _error_detail(response)
+        shown = (
+            self.detail
+            if isinstance(self.detail, str)
+            else json.dumps(self.detail, separators=(",", ":"))
+        )
+        super().__init__(
+            f"wlanpi-core returned {self.status_code}: {shown}",
+            request=response.request,
+            response=response,
+        )
+
+
+def _error_detail(response: httpx.Response) -> Any:
+    try:
+        body = response.json()
+    except ValueError:
+        text = response.text.strip() or response.reason_phrase
+        return text[:_MAX_TEXT_DETAIL]
+    if isinstance(body, dict) and "detail" in body:
+        return body["detail"]
+    return body
 
 
 def get_client() -> "CoreClient":
@@ -108,5 +149,6 @@ class CoreClient:
         response = await self._http.request(
             method, path, **{**kwargs, "headers": headers}
         )
-        response.raise_for_status()
+        if not response.is_success:
+            raise CoreAPIError(response)
         return response.json()

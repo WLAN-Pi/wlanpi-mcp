@@ -1,15 +1,16 @@
-"""MCP tools for WLAN scanning and namespace operations."""
+"""MCP tools for WLAN scanning."""
 
 from typing import Any, Literal
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
-    """Register the WLAN scan and namespace tools."""
+    """Register the WLAN scan tool."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def scan_wlan(
         interface: str | None = None,
         namespace: str | None = None,
@@ -39,24 +40,3 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         if namespace:
             params["namespace"] = namespace
         return await client.get("/api/v1/utils/wlan/scan", params=params)
-
-    @mcp.tool()
-    async def revert_wlan(
-        interface: str,
-        namespace: str = "testns",
-        delete_namespace: bool = True,
-    ) -> dict[str, Any]:
-        """
-        Revert a WLAN interface from its namespace back to the root namespace.
-
-        Args:
-            interface: WLAN interface name (e.g. 'wlan0')
-            namespace: Network namespace to revert from (default: 'testns')
-            delete_namespace: Delete the namespace after reverting
-        """
-        body = {
-            "iface": interface,
-            "namespace": namespace,
-            "delete_namespace": delete_namespace,
-        }
-        return await client.post("/api/v1/network/wlan/revert", json=body)

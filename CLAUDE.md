@@ -55,7 +55,7 @@ Tests for this live in `tests/test_auth.py` (middleware: 401 on missing/non-Bear
 
 ### Tool conventions
 
-Tools return error dicts (`{"error": "..."}`) rather than raising, so the LLM client gets a readable message. Read-heavy resources in `resources/` use a small module-level TTL cache (`_cached_get`). Docstrings on tool functions are the MCP tool descriptions shown to the model - write them for an LLM consumer.
+Tools return error dicts (`{"error": "..."}`) rather than raising, so the LLM client gets a readable message. The exception is a non-2xx from wlanpi-core: `CoreClient` raises `CoreAPIError` (an `httpx.HTTPStatusError` subclass) with core's `status_code` and `detail` intact - a string, an object like `{message, outcomes}`, or a plain-text body - and its message carries both, so the tool error the client sees says what core said. Don't swallow it into a generic message; tool docstrings should say what each core status means for the user. Every `@mcp.tool` passes `annotations=hints.READ_ONLY | ADDITIVE | DESTRUCTIVE` (`wlanpi_mcp/tools/hints.py`); MCP treats an unannotated tool as destructive, and `tests/test_tool_annotations.py` pins each tool's class, so a new tool must be added there. Read-heavy resources in `resources/` use a small module-level TTL cache (`_cached_get`). Docstrings on tool functions are the MCP tool descriptions shown to the model - write them for an LLM consumer.
 
 ## Deployment
 

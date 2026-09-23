@@ -49,7 +49,9 @@ def test_deprecated_wlan_tools_removed():
     assert "get_wlan_interfaces" not in tools
     assert "get_connected_network" not in tools
     assert "scan_wlan" in tools
-    assert "revert_wlan" in tools
+    # /network/wlan/revert now reverts everything Core manages and is
+    # deprecated; deactivate_network_config + reset_network_namespaces replace it.
+    assert "revert_wlan" not in tools
 
 
 # ── VLAN ─────────────────────────────────────────────────────────────────────
