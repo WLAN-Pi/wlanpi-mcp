@@ -1,3 +1,31 @@
+wlanpi-mcp (0.6.15-1) unstable; urgency=medium
+
+  * Track the wlanpi-core namespace-safety API (2.3.23, WLAN-Pi/wlanpi-core
+    #280-#302).
+  * CoreClient raises CoreAPIError for every non-2xx, carrying core's
+    status and detail intact (a string, an object such as
+    {message, outcomes}, or a plain-text body). Tool errors now say what
+    core said instead of only the HTTP reason phrase.
+  * Netconfig tool descriptions updated: secrets are never returned
+    (psk_set/password_set) and are kept when omitted in an update; the
+    full reserved-ID list, PSK rules and name-uniqueness rules; activation
+    outcomes (connected/provisioned/in_use/skipped/error) and that a
+    success can still leave entries unapplied; left_alone on deactivate;
+    the meanings of 404/409/422/500.
+  * New tools list_network_leftovers and reset_network_namespaces, and a
+    netconfig://leftovers resource.
+  * activate_network_config must ask the user before using override_active,
+    and reset_network_namespaces must confirm the exact namespaces with the
+    user before every call.
+  * Netconfig tools and scan_wlan carry MCP tool annotations: read-only on
+    the lookups, destructive on update/activate/deactivate/delete/reset,
+    additive on create, so clients that gate on them can prompt.
+  * Remove revert_wlan. /network/wlan/revert is deprecated and now reverts
+    everything Core manages regardless of its arguments; use
+    deactivate_network_config and reset_network_namespaces instead.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Wed, 23 Sep 2026 15:12:40 +0000
+
 wlanpi-mcp (0.6.14-1) unstable; urgency=medium
 
   * Ship wlanpi-mcp-ufw-first-boot.service. It was dropped from

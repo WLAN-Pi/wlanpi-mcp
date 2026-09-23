@@ -2,7 +2,7 @@ import httpx
 import pytest
 import respx
 
-from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.client.core_client import CoreAPIError, CoreClient
 
 
 @respx.mock
@@ -61,3 +61,27 @@ async def test_stdio_fallback_uses_configured_token(settings):
     )
     await client.get("/api/v1/system/device/info")
     assert route.calls[0].request.headers["Authorization"] == "Bearer stdio.jwt.token"
+
+
+@respx.mock
+async def test_error_detail_passes_through_intact(client):
+    # FastAPI detail may be a string or an object; keep objects as objects.
+    detail = {"message": "An adapter command failed", "error": "-524"}
+    respx.post("https://localhost:31415/api/v1/network/config/activate/lab").mock(
+        return_value=httpx.Response(500, json={"detail": detail})
+    )
+    with pytest.raises(CoreAPIError) as exc_info:
+        await client.post("/api/v1/network/config/activate/lab")
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == detail
+    assert str(exc_info.value).startswith("wlanpi-core returned 500: {")
+
+
+@respx.mock
+async def test_plain_text_error_body_is_kept(client):
+    respx.post("https://localhost:31415/api/v1/network/wlan/revert").mock(
+        return_value=httpx.Response(500, text="Internal Server Error")
+    )
+    with pytest.raises(CoreAPIError) as exc_info:
+        await client.post("/api/v1/network/wlan/revert")
+    assert exc_info.value.detail == "Internal Server Error"
