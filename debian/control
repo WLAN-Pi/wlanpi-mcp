@@ -15,7 +15,7 @@ Homepage: https://github.com/WLAN-Pi/wlanpi-mcp
 Package: wlanpi-mcp
 Architecture: any
 Pre-Depends: dpkg (>= 1.16.1), python3 (>= 3.13), ${misc:Pre-Depends}
-Depends: ${misc:Depends}, ${shlibs:Depends}, wlanpi-core
+Depends: ${misc:Depends}, ${shlibs:Depends}, wlanpi-core (>= 2.3.23)
 Description: WLAN Pi MCP Server
  wlanpi-mcp provides a Model Context Protocol (MCP) server that exposes
  WLAN Pi capabilities to AI assistants and MCP-compatible clients.
