@@ -7,7 +7,11 @@ Read this first.
 - PRs target `main` (the default branch).
 - Always branch from `main`, never from another PR branch. Rebase or
   recreate your branch if it has drifted; do not stack PR branches.
-- One concern per PR. No mixed move-plus-change diffs.
+- One concern per PR. Size is a soft target: above 500 changed lines, add a
+  `Review order` section to the description; above 1,000 is fine when the
+  change is cohesive. Split only at real seams, never to hit a number. Put
+  moves and formatting in separate commits from behavioral changes. Full policy:
+  [developer guide](https://github.com/WLAN-Pi/developers/blob/main/CONTRIBUTING.md#pr-size-and-scope).
 - A version bump is a release. Only package-content changes bump
   `debian/changelog`; CI-only or docs-only changes do not.
 - Keep `wlanpi_mcp/__version__.py` in sync with the deb version minus the
