@@ -5,27 +5,28 @@ from typing import Any
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.config import ALLOWED_SERVICES, get_settings
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the system management tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_device_info() -> dict[str, Any]:
         """Get WLAN Pi device identity: model, hostname, software version, and current operating mode."""
         return await client.get("/api/v1/system/device/info")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_device_stats() -> dict[str, Any]:
         """Get WLAN Pi live system metrics: IP address, CPU usage, RAM usage, disk usage, CPU temperature, and uptime."""
         return await client.get("/api/v1/system/device/stats")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def list_allowed_services() -> dict[str, Any]:
         """List all services that can be managed on this WLAN Pi (started, stopped, or queried)."""
         return {"services": ALLOWED_SERVICES}
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_service_status(name: str) -> dict[str, Any]:
         """
         Get the running status of a WLAN Pi service.
@@ -35,7 +36,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/system/service/status", params={"name": name})
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def start_service(name: str) -> dict[str, Any]:
         """
         Start a WLAN Pi service.
@@ -47,7 +48,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             return {"error": f"'{name}' is not in the allowed services list"}
         return await client.post("/api/v1/system/service/start", params={"name": name})
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def stop_service(name: str) -> dict[str, Any]:
         """
         Stop a WLAN Pi service.
@@ -59,7 +60,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             return {"error": f"'{name}' is not in the allowed services list"}
         return await client.post("/api/v1/system/service/stop", params={"name": name})
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def restart_service(name: str) -> dict[str, Any]:
         """
         Restart a WLAN Pi service.
@@ -73,27 +74,27 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             "/api/v1/system/service/restart", params={"name": name}
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_device_model() -> dict[str, Any]:
         """Get the WLAN Pi hardware model (e.g. WLAN Pi Pro, R4, M4)."""
         return await client.get("/api/v1/system/device/model")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_datetime() -> dict[str, Any]:
         """Get the WLAN Pi's current local date, time, and timezone."""
         return await client.get("/api/v1/system/datetime")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_timezone() -> dict[str, Any]:
         """Get the WLAN Pi's current system timezone."""
         return await client.get("/api/v1/system/timezone")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def list_timezones() -> dict[str, Any]:
         """List all timezones available on the WLAN Pi (for use with set_timezone)."""
         return await client.get("/api/v1/system/timezone/list")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def set_timezone(timezone: str) -> dict[str, Any]:
         """
         Set the WLAN Pi system timezone.
@@ -105,12 +106,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             "/api/v1/system/timezone/set", json={"timezone": timezone}
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def enable_auto_timezone() -> dict[str, Any]:
         """Enable NTP automatic time synchronization on the WLAN Pi."""
         return await client.post("/api/v1/system/timezone/auto")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def reboot_device() -> dict[str, Any]:
         """
         Reboot the WLAN Pi immediately.
@@ -125,7 +126,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             }
         return await client.post("/api/v1/system/reboot")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def shutdown_device() -> dict[str, Any]:
         """
         Shut down the WLAN Pi immediately.
@@ -140,7 +141,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             }
         return await client.post("/api/v1/system/shutdown")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_hotspot_clients(iface: str | None = None) -> dict[str, Any]:
         """
         Get the connected client count in hotspot mode.
@@ -153,7 +154,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         params = {"iface": iface} if iface else None
         return await client.get("/api/v1/system/hotspot/clients", params=params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_hotspot_ssid_passphrase() -> dict[str, Any]:
         """
         Get the hotspot SSID and WPA passphrase.

@@ -2,16 +2,15 @@
 
 from typing import Any, Literal
 
-from mcp.types import ToolAnnotations
-
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the WLAN scan tool."""
 
-    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def scan_wlan(
         interface: str | None = None,
         namespace: str | None = None,

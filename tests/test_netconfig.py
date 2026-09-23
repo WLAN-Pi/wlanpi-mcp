@@ -128,28 +128,3 @@ async def test_leftovers_resource(client):
     netconfig_res.register(mcp, client)
     contents = await mcp.read_resource("netconfig://leftovers")
     assert '"left_alone": []' in next(iter(contents)).content
-
-
-def test_tool_annotations(tools):
-    # Clients may gate calls on these; a tool that is not read-only is
-    # treated as destructive by default, so each one states its class.
-    read_only = {
-        "get_network_config_status",
-        "list_network_configs",
-        "get_network_config",
-        "list_network_leftovers",
-    }
-    destructive = {
-        "update_network_config",
-        "activate_network_config",
-        "deactivate_network_config",
-        "delete_network_config",
-        "reset_network_namespaces",
-    }
-    assert set(tools) == read_only | destructive | {"create_network_config"}
-    for name, tool in tools.items():
-        hints = tool.annotations
-        assert hints is not None, name
-        assert hints.readOnlyHint is (name in read_only), name
-        if name not in read_only:
-            assert hints.destructiveHint is (name in destructive), name

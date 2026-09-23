@@ -17,9 +17,12 @@ wlanpi-mcp (0.6.15-1) unstable; urgency=medium
   * activate_network_config must ask the user before using override_active,
     and reset_network_namespaces must confirm the exact namespaces with the
     user before every call.
-  * Netconfig tools and scan_wlan carry MCP tool annotations: read-only on
-    the lookups, destructive on update/activate/deactivate/delete/reset,
-    additive on create, so clients that gate on them can prompt.
+  * Every tool carries an MCP tool annotation class (read-only, additive
+    or destructive, wlanpi_mcp/tools/hints.py) so clients that gate on
+    them can prompt. Destructive: service control, reboot/shutdown,
+    profiler start/stop, regulatory domain, timezone, Bluetooth power,
+    DHCP renew, VLAN delete, and netconfig update/activate/deactivate/
+    delete/reset.
   * Remove revert_wlan. /network/wlan/revert is deprecated and now reverts
     everything Core manages regardless of its arguments; use
     deactivate_network_config and reset_network_namespaces instead.

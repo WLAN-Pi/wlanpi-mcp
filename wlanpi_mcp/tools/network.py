@@ -4,12 +4,13 @@ from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the network diagnostic tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_network_interfaces(interface: str | None = None) -> dict[str, Any]:
         """
         Get network interface details including IP addresses, flags, MTU, and link state.
@@ -21,7 +22,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             return await client.get(f"/api/v1/network/interfaces/{interface}")
         return await client.get("/api/v1/network/interfaces")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_network_info() -> dict[str, Any]:
         """
         Get a full network snapshot.
@@ -32,12 +33,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/network/info/")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_public_ipv6() -> dict[str, Any]:
         """Get the WLAN Pi's public IPv6 address and related details."""
         return await client.get("/api/v1/network/info/publicip6")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_ethernet_interface(interface: str) -> dict[str, Any]:
         """
         Get ethernet interface details for a specific interface.
@@ -47,7 +48,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get(f"/api/v1/network/ethernet/{interface}")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_routing_table(namespace: str | None = None) -> dict[str, Any]:
         """
         Get the structured IP routing table.
@@ -58,7 +59,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         params = {"namespace": namespace} if namespace else None
         return await client.get("/api/v1/network/routing", params=params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_tcp_connections(namespace: str | None = None) -> dict[str, Any]:
         """
         Get active TCP sockets/connections on the WLAN Pi.
@@ -69,7 +70,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         params = {"namespace": namespace} if namespace else None
         return await client.get("/api/v1/network/connections/tcp", params=params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_udp_connections(namespace: str | None = None) -> dict[str, Any]:
         """
         Get active UDP sockets on the WLAN Pi.
@@ -80,12 +81,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         params = {"namespace": namespace} if namespace else None
         return await client.get("/api/v1/network/connections/udp", params=params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_dhcp_leases() -> dict[str, Any]:
         """Get DHCP leases held by the WLAN Pi (parsed from dhclient lease files)."""
         return await client.get("/api/v1/network/dhcp/leases")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_interface_link_stats(interface: str) -> dict[str, Any]:
         """
         Get per-interface link statistics (via ethtool): speed, duplex, errors, drops.
@@ -95,7 +96,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get(f"/api/v1/network/interfaces/{interface}/link-stats")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def renew_dhcp_lease(interface: str) -> dict[str, Any]:
         """
         Renew the DHCP lease for an interface.
@@ -108,7 +109,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.post(f"/api/v1/network/interfaces/{interface}/renew")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_wlan_usb_drivers() -> dict[str, Any]:
         """
         List USB-attached WLAN adapters and their bound drivers.
@@ -118,7 +119,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/network/wlan/usb-drivers")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_wlan_pci_drivers() -> dict[str, Any]:
         """
         List PCI/platform wireless devices and their bound WLAN drivers.

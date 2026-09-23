@@ -39,6 +39,7 @@ from wlanpi_mcp.capture.ws_client import (
 )
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.config import get_settings
+from wlanpi_mcp.tools import hints
 from wlanpi_mcp.tools.capture import (
     DEFAULT_INTERFACE,
     MAX_DWELL_MS,
@@ -206,7 +207,7 @@ async def _run_file_capture(
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the non-streaming, file-backed capture tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def start_pcap_file(
         interface: str = DEFAULT_INTERFACE,
         channels: list[int] | None = None,
@@ -351,7 +352,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                     await sock.stop()
                 await sock.close()
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def stop_pcap_file(
         capture_id: str | None = None,
         session_id: str | None = None,
@@ -399,7 +400,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                     log.debug("awaiting stopped capture task: %r", exc)
         return entry.to_result()
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def list_pcap_files() -> dict[str, Any]:
         """
         List the non-streaming, file-backed captures this server has started.
@@ -415,7 +416,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         captures.extend(_disk_captures())
         return {"captures": captures, "count": len(captures)}
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def fetch_pcap_file(
         capture_id: str | None = None,
         path: str | None = None,

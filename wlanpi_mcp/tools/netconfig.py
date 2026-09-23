@@ -2,27 +2,20 @@
 
 from typing import Any
 
-from mcp.types import ToolAnnotations
-
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
-
-# Hints for clients that gate tool calls on them (MCP defaults a tool that is
-# not read-only to destructive, so every tool here states its class).
-_READ_ONLY = ToolAnnotations(readOnlyHint=True)
-_ADDITIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
-_DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the network configuration management tools."""
 
-    @mcp.tool(annotations=_READ_ONLY)
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_network_config_status() -> dict[str, Any]:
         """Get the status of all saved network configurations, showing which is active."""
         return await client.get("/api/v1/network/config/status")
 
-    @mcp.tool(annotations=_READ_ONLY)
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def list_network_configs() -> dict[str, Any]:
         """
         List all saved network configuration profiles.
@@ -31,7 +24,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/network/config/")
 
-    @mcp.tool(annotations=_READ_ONLY)
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_network_config(id: str) -> dict[str, Any]:
         """
         Get a saved network configuration by ID.
@@ -45,7 +38,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get(f"/api/v1/network/config/{id}")
 
-    @mcp.tool(annotations=_ADDITIVE)
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def create_network_config(config: dict[str, Any]) -> dict[str, Any]:
         """
         Create a saved network configuration profile.
@@ -66,7 +59,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.post("/api/v1/network/config/", json=config)
 
-    @mcp.tool(annotations=_DESTRUCTIVE)
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def update_network_config(
         id: str, config_update: dict[str, Any]
     ) -> dict[str, Any]:
@@ -85,7 +78,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.patch(f"/api/v1/network/config/{id}", json=config_update)
 
-    @mcp.tool(annotations=_DESTRUCTIVE)
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def activate_network_config(
         id: str, override_active: bool = False
     ) -> dict[str, Any]:
@@ -119,7 +112,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             params={"override_active": override_active},
         )
 
-    @mcp.tool(annotations=_DESTRUCTIVE)
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def deactivate_network_config(
         id: str, override_active: bool = False
     ) -> dict[str, Any]:
@@ -141,7 +134,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             params={"override_active": override_active},
         )
 
-    @mcp.tool(annotations=_DESTRUCTIVE)
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def delete_network_config(id: str, force: bool = False) -> dict[str, Any]:
         """
         Delete a saved profile.
@@ -158,7 +151,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             params={"force": force},
         )
 
-    @mcp.tool(annotations=_READ_ONLY)
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def list_network_leftovers() -> dict[str, Any]:
         """
         List namespaces holding radios that Core left alone (read-only).
@@ -168,7 +161,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/network/config/leftovers")
 
-    @mcp.tool(annotations=_DESTRUCTIVE)
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def reset_network_namespaces(namespaces: list[str]) -> dict[str, Any]:
         """
         DESTRUCTIVE: clear the named namespaces, including other tools' ones.

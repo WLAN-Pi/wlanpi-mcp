@@ -4,12 +4,13 @@ from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the Wi-Fi capability and hotspot tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_wifi_capabilities() -> dict[str, Any]:
         """
         Get Wi-Fi adapter capabilities.
@@ -19,12 +20,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/wifi/capabilities")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_wifi_regulatory() -> dict[str, Any]:
         """Get Wi-Fi regulatory domain information reported by the kernel."""
         return await client.get("/api/v1/wifi/regulatory")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_hotspot_stations(iface: str | None = None) -> dict[str, Any]:
         """
         List stations connected to the hotspot AP interface.
@@ -37,7 +38,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         params = {"iface": iface} if iface else None
         return await client.get("/api/v1/wifi/hotspot/stations", params=params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_hotspot_link_stats(iface: str | None = None) -> dict[str, Any]:
         """
         Get per-station link statistics for hotspot AP clients.

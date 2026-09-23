@@ -29,6 +29,7 @@ from wlanpi_mcp.capture.ws_client import (
 )
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.config import get_settings
+from wlanpi_mcp.tools import hints
 
 log = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ def _summary(
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the streaming capture tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def capture_scan(
         interface: str = DEFAULT_INTERFACE,
         channels: list[int] | None = None,
@@ -412,7 +413,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                 await sock.stop()
             await sock.close()
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def capture_observe(
         interface: str | None = None,
         session_id: str | None = None,
@@ -525,7 +526,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         finally:
             await sock.close()
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def list_capture_sessions() -> dict[str, Any]:
         """
         List the packet captures currently running on this WLAN Pi.
@@ -558,7 +559,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         finally:
             await sock.close()
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_capture_channels() -> dict[str, Any]:
         """
         List the channels each capture adapter on this WLAN Pi can tune to.

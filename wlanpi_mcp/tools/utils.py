@@ -4,12 +4,13 @@ from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.tools import hints
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the utility tools."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_reachability() -> dict[str, Any]:
         """
         Test WLAN Pi network reachability.
@@ -19,17 +20,17 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/utils/reachability")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_usb_interfaces() -> dict[str, Any]:
         """List USB network adapters currently plugged into the WLAN Pi."""
         return await client.get("/api/v1/utils/usb")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_ufw_status() -> dict[str, Any]:
         """Get the current UFW firewall status and active rules on the WLAN Pi."""
         return await client.get("/api/v1/utils/ufw")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def run_speedtest() -> dict[str, Any]:
         """
         Run an internet speed test from the WLAN Pi.
@@ -40,7 +41,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get("/api/v1/utils/speedtest", timeout=180.0)
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def start_blinker(interface: str = "eth0") -> dict[str, Any]:
         """
         Start the Ethernet port blinker.
@@ -55,12 +56,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             "/api/v1/utils/blinker/start", params={"interface": interface}
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.ADDITIVE)
     async def stop_blinker() -> dict[str, Any]:
         """Stop the Ethernet port blinker."""
         return await client.post("/api/v1/utils/blinker/stop")
 
-    @mcp.tool()
+    @mcp.tool(annotations=hints.READ_ONLY)
     async def get_blinker_status() -> dict[str, Any]:
         """Check whether the Ethernet port blinker is currently running."""
         return await client.get("/api/v1/utils/blinker/status")
