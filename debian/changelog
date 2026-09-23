@@ -1,8 +1,10 @@
 wlanpi-mcp (0.6.15-1) unstable; urgency=medium
 
   * Track the wlanpi-core namespace-safety API (2.3.23, WLAN-Pi/wlanpi-core
-    #280-#302). Depends on wlanpi-core (>= 2.3.23): older cores lack the
-    leftovers/reset routes and activation outcomes these tools describe.
+    #280-#302). Depends on wlanpi-core (>= 2.3.25): older cores lack the
+    leftovers/reset routes and activation outcomes these tools describe,
+    and before 2.3.25 an invalid activation (422) rolled back to default
+    instead of leaving the active profile running.
   * CoreClient raises CoreAPIError for every non-2xx, carrying core's
     status and detail intact (a string, an object such as
     {message, outcomes}, or a plain-text body). Tool errors now say what

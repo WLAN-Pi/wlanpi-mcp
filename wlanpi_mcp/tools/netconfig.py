@@ -96,9 +96,14 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         Core left it alone and there is no override. The user must stop that
         tool, then activate again.
         skipped: activating 'default' only; the interface was not created by Core.
-        Errors: 422/500 mean the activation was rolled back and 'default' is
-        active (the error lists outcomes or the adapter error). 404: no such
-        profile. 409: another change is running (nothing changed; retry
+        Errors: 422 means the profile is invalid (outcomes or message say why)
+        and nothing changed: a previously active profile keeps running (except
+        when re-activating the active profile itself with override_active and
+        outcomes are listed: it is torn down and 'default' is active). 500
+        with outcomes or an adapter error means the activation was rolled back
+        and 'default' is active; any other 500: check get_network_config_status.
+        404: no such profile.
+        409: another change is running (nothing changed; retry
         shortly), WLAN_MANAGEMENT=manual (Core is not managing Wi-Fi; tell the
         user), or a profile is already active (ask the user before retrying
         with override_active=true).

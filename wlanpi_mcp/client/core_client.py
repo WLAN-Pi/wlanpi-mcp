@@ -149,6 +149,6 @@ class CoreClient:
         response = await self._http.request(
             method, path, **{**kwargs, "headers": headers}
         )
-        if response.is_error:
+        if not response.is_success:
             raise CoreAPIError(response)
         return response.json()

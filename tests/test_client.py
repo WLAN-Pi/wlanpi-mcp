@@ -78,6 +78,19 @@ async def test_error_detail_passes_through_intact(client):
 
 
 @respx.mock
+async def test_redirect_raises_core_api_error(client):
+    # Redirects are not followed, so a 3xx is an error like any other non-2xx.
+    respx.get("https://localhost:31415/api/v1/network/config").mock(
+        return_value=httpx.Response(
+            307, headers={"Location": "/api/v1/network/config/"}
+        )
+    )
+    with pytest.raises(CoreAPIError) as exc_info:
+        await client.get("/api/v1/network/config")
+    assert exc_info.value.status_code == 307
+
+
+@respx.mock
 async def test_plain_text_error_body_is_kept(client):
     respx.post("https://localhost:31415/api/v1/network/wlan/revert").mock(
         return_value=httpx.Response(500, text="Internal Server Error")
