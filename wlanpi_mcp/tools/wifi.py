@@ -17,6 +17,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
         Returns 'iw phy' capability dumps for each PHY, including supported
         bands, channels, HT/VHT/HE features, and interface modes.
+
+        Lists radios in the root namespace and in every network namespace a
+        network configuration moved them into. Each adapter's 'namespace' is
+        the namespace it is in, or null for root - a radio in a namespace is
+        not missing. A namespace that can't be read is skipped, so the list is
+        best effort.
         """
         return await client.get("/api/v1/wifi/capabilities")
 

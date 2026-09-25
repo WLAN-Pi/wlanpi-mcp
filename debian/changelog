@@ -1,3 +1,26 @@
+wlanpi-mcp (0.6.16-1) unstable; urgency=medium
+
+  * Track wlanpi-core 2.4.0-2.4.4 (WLAN-Pi/wlanpi-mcp #42). Depends on
+    wlanpi-core (>= 2.4.4): older cores lack the profiler purge route and
+    the adapter inventory namespace field these tools describe.
+  * New destructive tool purge_profiler_data (POST /api/v1/profiler/purge)
+    deletes the profiler's saved profiles, captures and reports and returns
+    {files, bytes}. It must be confirmed with the user first; core answers
+    409 while the profiler is starting, running or stopping.
+  * get_wifi_capabilities, get_wlan_usb_drivers and get_wlan_pci_drivers
+    now say that radios a network configuration moved into a namespace are
+    listed with their namespace (null for root), and that an unreadable
+    namespace is skipped.
+  * scan_wlan lists the key_mgmt values (wpa-psk, sae, wpa-eap, owe, wep,
+    open, unknown) and notes that a WPA2/WPA3 transition network stays
+    wpa-psk, with the full AKM list in flags.
+  * Tool definitions synced with the wlanpi-core 2.4.0 OpenAPI schema
+    (#39): newer start_profiler flags, VLAN address family and fields,
+    reachability targets, scan_wlan error codes; mlo dropped from network
+    config docs (removed in core 2.4.1).
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 25 Sep 2026 16:00:00 +0000
+
 wlanpi-mcp (0.6.15-1) unstable; urgency=medium
 
   * Track the wlanpi-core namespace-safety API (2.3.23, WLAN-Pi/wlanpi-core

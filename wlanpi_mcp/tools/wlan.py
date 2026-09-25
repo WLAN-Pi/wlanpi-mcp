@@ -30,6 +30,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         on the same Intel radio; the capture must stop first). 422 with
         NO_SCAN_ADAPTER: no suitable adapter. 503: scan command unavailable.
 
+        Each network's 'key_mgmt' is one of: 'wpa-psk' (WPA/WPA2-Personal),
+        'sae' (WPA3-Personal), 'wpa-eap' (Enterprise), 'owe' (Enhanced Open),
+        'wep', 'open' or 'unknown' (null if not reported). A WPA2/WPA3
+        transition network reports 'wpa-psk', since a WPA2 client can join it;
+        read 'flags' for the full AKM list (e.g. SAE alongside PSK).
+
         To connect to a network found by this scan, create and activate a network
         configuration (create_network_config / activate_network_config).
 

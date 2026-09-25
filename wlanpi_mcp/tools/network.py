@@ -116,6 +116,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
         If 'adapters' is empty but interfaces_scanned > 0, the radios are
         PCI/on-board — use get_wlan_pci_drivers instead.
+
+        Covers the root namespace and every network namespace a network
+        configuration moved an interface into. Each adapter's 'namespace' is
+        the namespace it is in, or null for root - an interface in a namespace
+        is not missing. A namespace that can't be read is skipped, so the list
+        is best effort; interfaces_scanned counts across all namespaces read.
         """
         return await client.get("/api/v1/network/wlan/usb-drivers")
 
@@ -125,5 +131,11 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         List PCI/platform wireless devices and their bound WLAN drivers.
 
         Comes from lspci, covering built-in Wi-Fi radios.
+
+        Covers the root namespace and every network namespace a network
+        configuration moved an interface into. Each adapter's 'namespace' is
+        the namespace it is in, or null for root - an interface in a namespace
+        is not missing. A namespace that can't be read is skipped, so the list
+        is best effort; interfaces_scanned counts across all namespaces read.
         """
         return await client.get("/api/v1/network/wlan/pci-drivers")

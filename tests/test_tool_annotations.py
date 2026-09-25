@@ -19,6 +19,7 @@ DESTRUCTIVE = {
     "renew_dhcp_lease",  # may change the address the client is using
     "start_profiler",  # takes an adapter over for its AP
     "stop_profiler",
+    "purge_profiler_data",  # deletes saved profiles and reports
     "start_service",  # e.g. wlanpi-profiler takes a radio
     "stop_service",
     "restart_service",
