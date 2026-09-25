@@ -155,6 +155,24 @@ async def test_start_profiler_forwards_newer_flags():
     }
 
 
+async def test_purge_profiler_data_posts_to_purge():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from wlanpi_mcp._compat import FastMCP
+    from wlanpi_mcp.tools.profiler import register
+
+    mock_client = MagicMock()
+    mock_client.post = AsyncMock(return_value={"files": 12, "bytes": 48213})
+
+    mcp = FastMCP("test")
+    register(mcp, mock_client)
+
+    result = await mcp._tool_manager._tools["purge_profiler_data"].run({})
+
+    mock_client.post.assert_awaited_once_with("/api/v1/profiler/purge")
+    assert result == {"files": 12, "bytes": 48213}
+
+
 async def test_get_reachability_forwards_targets():
     from unittest.mock import AsyncMock, MagicMock
 

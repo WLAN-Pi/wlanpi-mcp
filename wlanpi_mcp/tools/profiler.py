@@ -89,3 +89,21 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     async def stop_profiler() -> dict[str, Any]:
         """Stop the wlanpi-profiler and return summary results."""
         return await client.post("/api/v1/profiler/stop")
+
+    @mcp.tool(annotations=hints.DESTRUCTIVE)
+    async def purge_profiler_data() -> dict[str, Any]:
+        """
+        Delete every profiler client profile, capture and session report.
+
+        This cannot be undone. Always confirm with the user first, and only
+        call it when they asked to clear the profiler's saved data - never as
+        cleanup after a profiling run.
+
+        Returns {"files": N, "bytes": N}: how many files and symlinks were
+        removed and their total size.
+
+        Errors: 409 while the profiler is starting, running or stopping - stop
+        it (stop_profiler) and wait for get_profiler_status to show it stopped,
+        then retry.
+        """
+        return await client.post("/api/v1/profiler/purge")
