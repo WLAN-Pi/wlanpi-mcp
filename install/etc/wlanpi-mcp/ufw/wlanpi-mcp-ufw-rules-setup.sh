@@ -5,19 +5,29 @@
 # Mirrors the wlanpi-core UFW setup pattern: the app profile is staged under
 # /etc/wlanpi-mcp/ufw and copied into /etc/ufw/applications.d here, then
 # enabled with `ufw allow`. A version marker keeps this idempotent so it only
-# re-applies when the shipped rules version changes.
+# re-applies when the shipped rules version changes, or when the rule it
+# recorded as applied is no longer there.
+#
+# The marker is written only after `ufw show added` confirms the rule. ufw
+# reads its rule files before taking its lock, so a `ufw allow` racing another
+# one (e.g. wlanpi-core's first-boot oneshot) can exit 0 and still be lost
+# (WLAN-Pi/wlanpi-mcp#45). Checking the result, rather than the exit code,
+# keeps a lost rule from being marked done and never retried.
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly RULES_DIR="/etc/wlanpi-mcp/ufw"
+# Filesystem root prefix; empty on a device. Tests point it at a temp tree.
+readonly ROOT="${WLANPI_MCP_UFW_ROOT:-}"
+readonly RULES_DIR="${ROOT}/etc/wlanpi-mcp/ufw"
 readonly CURRENT_VERSION_FILE="${RULES_DIR}/current-rules-version"
-readonly INSTALLED_VERSION_FILE="/etc/wlanpi-mcp/installed-rules-version"
-readonly UFW_APPS_DIR="/etc/ufw/applications.d"
+readonly INSTALLED_VERSION_FILE="${ROOT}/etc/wlanpi-mcp/installed-rules-version"
+readonly UFW_APPS_DIR="${ROOT}/etc/ufw/applications.d"
 readonly RULES_FILE="${RULES_DIR}/wlanpi-mcp.rules"
 readonly UFW_APP_FILE="${UFW_APPS_DIR}/wlanpi-mcp"
-readonly LOGFILE="/var/log/wlanpi-mcp-firstboot.log"
+readonly LOGFILE="${ROOT}/var/log/wlanpi-mcp-firstboot.log"
+readonly UFW_RULE="ufw allow wlanpi-mcp"
 
 mkdir -p "$(dirname "$LOGFILE")" 2>/dev/null || true
 exec > >(tee -a "$LOGFILE") 2>&1
@@ -84,6 +94,16 @@ check_dir_writable() {
     fi
 }
 
+# True when ufw's saved user rules include the wlanpi-mcp allow. `ufw show
+# added` reads the rule files, so it works whether or not ufw is enabled.
+rule_present() {
+    local added
+    # Captured, not piped into `grep -q`: under pipefail an early grep exit can
+    # SIGPIPE ufw and turn a match into a failure.
+    added=$(ufw show added 2>/dev/null) || return 1
+    grep -qxF "$UFW_RULE" <<<"$added"
+}
+
 check_prerequisites() {
     check_file_readable "$CURRENT_VERSION_FILE" "Rules version file"
     check_file_readable "$RULES_FILE" "UFW rules file"
@@ -106,8 +126,11 @@ apply_ufw_rules() {
             error "Failed to read installed version from ${INSTALLED_VERSION_FILE}"
         fi
         if [ "$current_version" = "$installed_version" ]; then
-            log_info "UFW rules are up to date (version: ${current_version})"
-            return 0
+            if rule_present; then
+                log_info "UFW rules are up to date (version: ${current_version})"
+                return 0
+            fi
+            log_info "UFW rules marked applied (version: ${current_version}) but the wlanpi-mcp rule is missing, re-applying"
         fi
     fi
 
@@ -128,6 +151,9 @@ apply_ufw_rules() {
     fi
     if ! ufw reload >/dev/null 2>&1; then
         error "Failed to reload UFW"
+    fi
+    if ! rule_present; then
+        error "ufw allow wlanpi-mcp exited 0 but the rule is not in ufw's rules (lost to a concurrent ufw call?); not marking applied so the next boot retries"
     fi
 
     log_info "Updating installed version..."
