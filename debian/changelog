@@ -1,3 +1,15 @@
+wlanpi-mcp (0.6.17-1) unstable; urgency=medium
+
+  * start_profiler documents core's {success, reason, message} result
+    (WLAN-Pi/wlanpi-mcp #41, from wlanpi-core #334 in 2.4.2-1): success
+    false means the profiler did not start and the client should show
+    message; reason is the profiler's exit reason (e.g.
+    country_code_detection, interface_validation), exited,
+    already_running or spawn_failed. success true with reason starting
+    means poll get_profiler_status until running.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 25 Sep 2026 18:00:00 +0000
+
 wlanpi-mcp (0.6.16-1) unstable; urgency=medium
 
   * Track wlanpi-core 2.4.0-2.4.4 (WLAN-Pi/wlanpi-mcp #42). Depends on
