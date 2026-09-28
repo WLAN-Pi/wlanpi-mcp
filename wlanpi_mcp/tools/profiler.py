@@ -63,6 +63,23 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             no_bpf_filters: Remove the sniffer's BPF filters (sees more
                 frames, but may reduce profiler performance)
             debug: Enable debug logging in profiler
+
+        Core waits (up to about 25 s) for the profiler to run or fail, then
+        returns {"success": bool, "reason": str | null, "message": str | null}.
+
+        success false means the profiler did NOT start - do not report it as
+        started. Show the user 'message', which says why. 'reason' is one of:
+            - the profiler's own exit reason when it exited during startup,
+              e.g. 'country_code_detection' (no regulatory domain set) or
+              'interface_validation' (unknown interface)
+            - 'exited': it exited during startup without giving a reason
+            - 'already_running': a profiler started by core is still running;
+              stop it (stop_profiler) first if new settings are wanted
+            - 'spawn_failed': the profiler could not be launched
+
+        success true with reason 'starting' means it was still starting when
+        the wait ended. In AP mode, poll get_profiler_status until 'running'
+        is true before telling the user clients can connect.
         """
         args = {
             "interface": interface,

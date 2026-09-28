@@ -155,6 +155,32 @@ async def test_start_profiler_forwards_newer_flags():
     }
 
 
+async def test_start_profiler_returns_core_failure_reason():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from wlanpi_mcp._compat import FastMCP
+    from wlanpi_mcp.tools.profiler import register
+
+    failure = {
+        "success": False,
+        "reason": "country_code_detection",
+        "message": "No regulatory domain set",
+    }
+    mock_client = MagicMock()
+    mock_client.post = AsyncMock(return_value=failure)
+
+    mcp = FastMCP("test")
+    register(mcp, mock_client)
+
+    tool = mcp._tool_manager._tools["start_profiler"]
+    result = await tool.run({"interface": "wlan0"})
+
+    assert result == failure
+    # The tool description tells the client how to read the result.
+    for word in ("success", "message", "already_running", "starting"):
+        assert word in tool.description
+
+
 async def test_purge_profiler_data_posts_to_purge():
     from unittest.mock import AsyncMock, MagicMock
 
