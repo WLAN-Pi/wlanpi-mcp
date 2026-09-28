@@ -1,3 +1,18 @@
+wlanpi-mcp (0.6.17-1) unstable; urgency=medium
+
+  * Fix the UFW first-boot race with wlanpi-core (WLAN-Pi/wlanpi-mcp#45).
+    ufw reads its rule files before it takes its lock, so the MCP and core
+    first-boot oneshots running `ufw allow` together could lose one rule
+    while both wrote their applied markers. wlanpi-mcp-ufw-first-boot.service
+    now runs After=wlanpi-core-ufw-first-boot.service.
+  * The UFW setup script checks `ufw show added` for the wlanpi-mcp rule
+    before writing its installed-rules-version marker, and re-applies when
+    the marker is current but the rule is missing. A lost rule now fails the
+    oneshot and is retried on the next boot, and devices already hit by the
+    race repair themselves on upgrade.
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Fri, 25 Sep 2026 20:19:23 +0000
+
 wlanpi-mcp (0.6.16-1) unstable; urgency=medium
 
   * Track wlanpi-core 2.4.0-2.4.4 (WLAN-Pi/wlanpi-mcp #42). Depends on
