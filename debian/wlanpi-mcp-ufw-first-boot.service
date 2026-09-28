@@ -2,7 +2,11 @@
 
 [Unit]
 Description=wlanpi-mcp ufw first boot setup
-After=network.target ufw.service wlanpi-first-boot.service
+# ufw reads its rule files before it takes its lock, so two `ufw allow` calls
+# running at once can each overwrite the other's rule. Run after wlanpi-core's
+# oneshot, not beside it (WLAN-Pi/wlanpi-mcp#45). An After= on a unit that
+# isn't installed is ignored.
+After=network.target ufw.service wlanpi-first-boot.service wlanpi-core-ufw-first-boot.service
 Before=wlanpi-mcp.service
 
 [Service]
