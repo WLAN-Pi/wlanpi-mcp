@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import EmbeddedResource
 
 from tests.test_capture_tools import (
@@ -237,8 +238,8 @@ async def test_bytes_written_advances_while_the_capture_is_running(capdir):
 async def test_fetch_without_identifier_or_path_is_an_error(capdir):
     _tmp, _use = capdir
     tools = _register()
-    result = await tools["fetch_pcap_file"].fn()
-    assert "pass capture_id or path" in result["error"]
+    with pytest.raises(ToolError, match="pass capture_id or path"):
+        await tools["fetch_pcap_file"].run({})
 
 
 async def test_fetch_via_real_dispatch_path_resolves_capture_id(capdir):
@@ -325,18 +326,37 @@ async def test_fetch_returns_a_pcapng_blob(capdir):
     assert via_alias.resource.blob == fetched.resource.blob
 
 
+async def test_fetch_sends_the_blob_once_without_structured_content(capdir):
+    # Issue #50: with structured output on, FastMCP also serialised the
+    # EmbeddedResource into structuredContent, doubling the payload. Go through
+    # the real conversion path and check only unstructured content comes back.
+    tmp, _use = capdir
+    target = tmp / "capture-20260101T000000Z-cap_once.pcapng"
+    target.write_bytes(b"\x0a\x0d\x0d\x0a" + b"x" * 4096)
+    tools = _register()
+    tool = tools["fetch_pcap_file"]
+
+    assert tool.output_schema is None
+    converted = await tool.run({"capture_id": "cap_once"}, convert_result=True)
+    # Structured tools return (content, structured); unstructured return content.
+    assert isinstance(converted, list) and len(converted) == 1
+    (item,) = converted
+    assert isinstance(item, EmbeddedResource)
+    assert base64.b64decode(item.resource.blob) == target.read_bytes()
+
+
 async def test_fetch_unknown_session_is_an_error(capdir):
     _tmp, _use = capdir
     tools = _register()
-    result = await tools["fetch_pcap_file"].fn(session_id="ghost")
-    assert "no capture file" in result["error"]
+    with pytest.raises(ToolError, match="no capture file"):
+        await tools["fetch_pcap_file"].run({"session_id": "ghost"})
 
 
 async def test_fetch_refuses_a_path_outside_the_capture_dir(capdir):
     _tmp, _use = capdir
     tools = _register()
-    result = await tools["fetch_pcap_file"].fn(path="/etc/passwd")
-    assert "outside" in result["error"]
+    with pytest.raises(ToolError, match="outside"):
+        await tools["fetch_pcap_file"].run({"path": "/etc/passwd"})
 
 
 async def test_fetch_by_path_within_the_capture_dir_works(capdir):

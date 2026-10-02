@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import BlobResourceContents, EmbeddedResource
 from pydantic import AnyUrl
 
@@ -416,12 +417,17 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         captures.extend(_disk_captures())
         return {"captures": captures, "count": len(captures)}
 
-    @mcp.tool(annotations=hints.READ_ONLY)
+    # structured_output=False: with structured output on, FastMCP serialises the
+    # returned EmbeddedResource into structuredContent as well as content, so
+    # the base64 pcap goes over the wire twice (issue #50). Errors are raised as
+    # ToolError (isError: true) rather than returned as dicts, so the result is
+    # only ever the blob.
+    @mcp.tool(annotations=hints.READ_ONLY, structured_output=False)
     async def fetch_pcap_file(
         capture_id: str | None = None,
         path: str | None = None,
         session_id: str | None = None,
-    ) -> dict[str, Any] | EmbeddedResource:
+    ) -> EmbeddedResource:
         """
         Fetch a non-streaming capture's pcapng file as a binary blob.
 
@@ -429,10 +435,15 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         the capture named by capture_id (preferred) or by an explicit
         on-device path. Open it in Wireshark/tshark for analysis. Fetch after
         the capture has stopped for a complete file; fetching a still-running
-        capture returns only the bytes written so far.
+        capture returns only the bytes written so far. The blob is base64, about
+        1.33x the file size (see size_bytes in list_pcap_files) - check the size
+        before fetching a long capture.
 
         For safety this reads only files under the server's managed capture
         directory; any other path is refused.
+
+        Fails as a tool error when no identifier is given, the capture_id or
+        path has no file, or the path is outside the capture directory.
 
         Args:
             capture_id: The capture_id from start_pcap_file/list_pcap_files.
@@ -444,11 +455,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         if cid:
             resolved_path = _resolve_session_path(cid)
             if resolved_path is None:
-                return {
-                    "error": (
-                        f"no capture file for capture_id '{cid}'. See list_pcap_files."
-                    )
-                }
+                raise ToolError(
+                    f"no capture file for capture_id '{cid}'. See list_pcap_files."
+                )
             path = resolved_path
         elif not path:
             log.info(
@@ -458,25 +467,23 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                 session_id,
                 path,
             )
-            return {"error": "pass capture_id or path"}
+            raise ToolError("pass capture_id or path")
 
         if not _within_capture_dir(path):
-            return {
-                "error": (
-                    "refusing to read a path outside the managed capture "
-                    f"directory ({_capture_dir()})"
-                )
-            }
+            raise ToolError(
+                "refusing to read a path outside the managed capture "
+                f"directory ({_capture_dir()})"
+            )
 
         resolved = os.path.realpath(path)
         if not os.path.isfile(resolved):
-            return {"error": f"no such capture file: {path}"}
+            raise ToolError(f"no such capture file: {path}")
 
         try:
             with open(resolved, "rb") as fh:
                 data = fh.read()
         except OSError as exc:
-            return {"error": f"could not read capture file: {exc}"}
+            raise ToolError(f"could not read capture file: {exc}") from exc
 
         blob = base64.b64encode(data).decode("ascii")
         return EmbeddedResource(
