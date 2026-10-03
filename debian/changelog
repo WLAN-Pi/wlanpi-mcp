@@ -17,6 +17,12 @@ wlanpi-mcp (0.6.17-1) unstable; urgency=medium
     the marker is current but the rule is missing. A lost rule now fails the
     oneshot and is retried on the next boot, and devices already hit by the
     race repair themselves on upgrade.
+  * fetch_pcap_file returns the pcap once (WLAN-Pi/wlanpi-mcp#50). Its
+    dict | EmbeddedResource return type turned on FastMCP structured output,
+    which serialised the base64 blob into structuredContent as well as
+    content and doubled every response. The tool is now registered with
+    structured_output=False, and its errors are raised as tool errors
+    (isError: true) instead of returned as {"error": ...} dicts.
 
  -- Jake Snyder <jsnyder81@gmail.com>  Fri, 25 Sep 2026 20:19:23 +0000
 
