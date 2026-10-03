@@ -23,6 +23,12 @@ wlanpi-mcp (0.6.17-1) unstable; urgency=medium
     content and doubled every response. The tool is now registered with
     structured_output=False, and its errors are raised as tool errors
     (isError: true) instead of returned as {"error": ...} dicts.
+  * New read-only tool get_wlan_link wraps wlanpi-core's
+    GET /api/v1/network/interfaces/{iface}/wlan-link: whether a client is
+    associated, and for a Wi-Fi 7 MLO client the AP MLD and its set-up links
+    with link_id, bssid, freq_mhz and active (wlanpi-core #359). Agents can
+    check an MLO association in one small call; get_network_config_status
+    reports channel null for an MLD.
 
  -- Jake Snyder <jsnyder81@gmail.com>  Fri, 25 Sep 2026 20:19:23 +0000
 

@@ -96,6 +96,36 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         """
         return await client.get(f"/api/v1/network/interfaces/{interface}/link-stats")
 
+    @mcp.tool(annotations=hints.READ_ONLY)
+    async def get_wlan_link(interface: str) -> dict[str, Any]:
+        """
+        Report whether a Wi-Fi client interface is associated, and to what.
+
+        A small answer from `iw dev <interface> link`; wlanpi-core finds the
+        interface's network namespace itself. Use it to check a client after
+        activate_network_config: 'provisioned' there only means the config was
+        applied. Prefer it to get_network_config_status, whose 'channel' is
+        null for a Wi-Fi 7 multi-link (MLO) client.
+
+        connected: associated or not. ssid, bssid (for MLO, the AP MLD
+        address), signal_dbm, rx/tx bitrate and byte counters as iw reports
+        them.
+
+        links (wlanpi-core with multi-link support; absent on older cores): one
+        entry per set-up MLO link with link_id, the AP link bssid, freq_mhz and
+        active, plus local_addr (this client's own MAC on that link: each link
+        has its own, none equals the interface MAC, and it is the address on
+        the air) and, for active links, width_mhz and center1_mhz. Only active
+        links carry traffic; a set-up link can be idle. The set of links can
+        change between associations. Empty for a non-MLO connection. With more than one active link, freq_mhz at the top level
+        is null. On older cores without links, freq_mhz is unreliable for MLO.
+
+        Args:
+            interface: The client interface, e.g. 'wlan0', or a network
+                profile's iface_display_name such as 'mlo-client'.
+        """
+        return await client.get(f"/api/v1/network/interfaces/{interface}/wlan-link")
+
     @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def renew_dhcp_lease(interface: str) -> dict[str, Any]:
         """
