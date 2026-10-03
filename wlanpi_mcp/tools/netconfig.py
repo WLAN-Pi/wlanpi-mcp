@@ -1,10 +1,30 @@
 """MCP tools for managing saved network configuration profiles."""
 
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.tools import hints
+
+
+# Top-level shape of wlanpi-core's NetConfig / NetConfigUpdate. Typed so the
+# tool's input schema shows namespaces and roots as arrays; with a bare dict a
+# model has to guess, and a guess like "roots": "" fails at core with 422. The
+# entries stay free-form objects: their fields are core's, described in the
+# create_network_config docstring, and validated by core.
+class NetConfig(TypedDict):
+    """A network configuration profile as create_network_config sends it."""
+
+    id: str
+    namespaces: NotRequired[list[dict[str, Any]] | None]
+    roots: NotRequired[list[dict[str, Any]] | None]
+
+
+class NetConfigUpdate(TypedDict, total=False):
+    """The lists update_network_config replaces; omit a list to keep it."""
+
+    namespaces: list[dict[str, Any]] | None
+    roots: list[dict[str, Any]] | None
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
@@ -39,7 +59,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return await client.get(f"/api/v1/network/config/{id}")
 
     @mcp.tool(annotations=hints.ADDITIVE)
-    async def create_network_config(config: dict[str, Any]) -> dict[str, Any]:
+    async def create_network_config(config: NetConfig) -> dict[str, Any]:
         """
         Create a saved network configuration profile.
 
@@ -60,13 +80,13 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         display name repeated within one namespace.
 
         Args:
-            config: Network configuration dict matching the NetConfig schema
+            config: {id, namespaces?, roots?}; namespaces and roots are lists of entries
         """
         return await client.post("/api/v1/network/config/", json=config)
 
     @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def update_network_config(
-        id: str, config_update: dict[str, Any]
+        id: str, config_update: NetConfigUpdate
     ) -> dict[str, Any]:
         """
         Update a profile's namespaces and/or roots (replaces those lists).
@@ -76,11 +96,13 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         can be sent back as is. If you change an entry's interface or
         namespace, the secret is not carried over: ask the user for it.
         Entries take the same fields as create_network_config and the same
-        validation (422).
+        validation (422). Send only the list you are changing: an omitted
+        list keeps the stored one, and [] clears it. Core refuses to edit the
+        active profile (409); deactivate it first.
 
         Args:
             id: Configuration profile ID to update
-            config_update: {namespaces?: [...], roots?: [...]}
+            config_update: {namespaces?, roots?}; each a list of entries
         """
         return await client.patch(f"/api/v1/network/config/{id}", json=config_update)
 

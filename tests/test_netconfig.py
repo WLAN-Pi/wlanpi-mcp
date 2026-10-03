@@ -5,6 +5,8 @@ Run through tool.run (FastMCP's real validation + dispatch) with a real
 CoreClient and respx, so a core error is seen as the MCP client sees it.
 """
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -128,3 +130,79 @@ async def test_leftovers_resource(client):
     netconfig_res.register(mcp, client)
     contents = await mcp.read_resource("netconfig://leftovers")
     assert '"left_alone": []' in next(iter(contents)).content
+
+
+def _arg_schema(tool, arg):
+    params = tool.parameters
+    schema = params["properties"][arg]
+    if "$ref" in schema:
+        schema = params["$defs"][schema["$ref"].rsplit("/", 1)[1]]
+    return schema
+
+
+def test_config_args_publish_list_types(tools):
+    update = _arg_schema(tools["update_network_config"], "config_update")
+    create = _arg_schema(tools["create_network_config"], "config")
+    assert create["required"] == ["id"]
+    for schema in (update, create):
+        for key in ("namespaces", "roots"):
+            types = {s.get("type") for s in schema["properties"][key]["anyOf"]}
+            assert types == {"array", "null"}
+
+
+@respx.mock
+@pytest.mark.parametrize("placeholder", ["", {}])
+async def test_update_rejects_non_list_before_core(tools, placeholder):
+    # Seen from a small model: {"namespaces": [...], "roots": ""} -> core 422.
+    route = respx.patch(f"{BASE}/lab").mock(return_value=httpx.Response(200, json={}))
+
+    with pytest.raises(ToolError) as err:
+        await tools["update_network_config"].run(
+            {"id": "lab", "config_update": {"namespaces": [], "roots": placeholder}}
+        )
+
+    assert "roots" in str(err.value)
+    assert not route.called
+
+
+@respx.mock
+async def test_update_sends_only_the_lists_given(tools):
+    route = respx.patch(f"{BASE}/lab").mock(
+        return_value=httpx.Response(200, json={"id": "lab", "message": "ok"})
+    )
+    namespaces = [{"namespace": "lab", "interface": "wlan2", "mode": "managed"}]
+
+    await tools["update_network_config"].run(
+        {"id": "lab", "config_update": {"namespaces": namespaces}}
+    )
+    assert json.loads(route.calls.last.request.content) == {"namespaces": namespaces}
+
+    await tools["update_network_config"].run(
+        {"id": "lab", "config_update": {"namespaces": None, "roots": []}}
+    )
+    assert json.loads(route.calls.last.request.content) == {
+        "namespaces": None,
+        "roots": [],
+    }
+
+
+@respx.mock
+async def test_create_passes_the_profile_through(tools):
+    route = respx.post(f"{BASE}/").mock(
+        return_value=httpx.Response(200, json={"id": "lab", "message": "ok"})
+    )
+    entry = {
+        "namespace": "lab",
+        "interface": "wlan2",
+        "iface_display_name": "mlo-client",
+        "security": {"ssid": "x", "security": "WPA3-PSK", "psk": "passphrase"},
+    }
+
+    await tools["create_network_config"].run(
+        {"config": {"id": "lab", "namespaces": [entry]}}
+    )
+
+    assert json.loads(route.calls.last.request.content) == {
+        "id": "lab",
+        "namespaces": [entry],
+    }

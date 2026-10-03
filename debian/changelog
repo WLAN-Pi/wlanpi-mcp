@@ -23,6 +23,11 @@ wlanpi-mcp (0.6.17-1) unstable; urgency=medium
     content and doubled every response. The tool is now registered with
     structured_output=False, and its errors are raised as tool errors
     (isError: true) instead of returned as {"error": ...} dicts.
+  * create_network_config and update_network_config publish a typed input
+    schema: id, and namespaces and roots as lists of entries, instead of a
+    bare object. A model sending "roots": "" to re-send a profile got a 422
+    from core; it now sees the shape up front, and a wrong type is rejected
+    by the MCP server naming the field.
 
  -- Jake Snyder <jsnyder81@gmail.com>  Fri, 25 Sep 2026 20:19:23 +0000
 
