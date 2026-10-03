@@ -1,5 +1,6 @@
 """Regression guards for the assembled streamable HTTP app as nginx presents it."""
 
+import shlex
 from contextlib import asynccontextmanager
 
 import httpx
@@ -251,7 +252,7 @@ async def test_pcap_download_link_serves_the_file_once_without_a_jwt(
         url = result["download_url"]
         assert url.startswith("https://wlanpi-9be.local:8767/pcap/")
         assert result["size_bytes"] == len(data)
-        assert url in result["curl"] and result["curl"].startswith("curl -sfk -o ")
+        assert url in result["curl"] and result["curl"].startswith("curl -gsSfk -o ")
         route = url.removeprefix("https://wlanpi-9be.local:8767")
 
         first = await http.get(route)  # no Authorization header
@@ -285,3 +286,78 @@ async def test_expired_pcap_download_link_is_refused(mcp, monkeypatch, tmp_path)
         response = await http.get("/pcap/stale")
     assert response.status_code == 404
     assert capture_file._TICKETS == {}
+
+
+def test_pcap_download_route_is_the_only_route_without_a_jwt(mcp):
+    # BearerTokenMiddleware exempts everything under TICKET_PATH_PREFIXES, so
+    # any other route added there would be served without authentication.
+    from wlanpi_mcp.middleware.bearer_token import TICKET_PATH_PREFIXES
+    from wlanpi_mcp.tools import capture_file
+
+    exempt = [
+        route.path
+        for route in mcp.streamable_http_app().routes
+        if route.path.startswith(TICKET_PATH_PREFIXES)
+    ]
+    assert exempt == [capture_file.DOWNLOAD_PREFIX + "{ticket}"]
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        # A list from a proxy chain: the first hop is the client's scheme.
+        (
+            {"Host": "wlanpi-9be.local:8767", "X-Forwarded-Proto": "https, http"},
+            "https://wlanpi-9be.local:8767/pcap/",
+        ),
+        (
+            {"Host": "[fe80::1]:8767", "X-Forwarded-Proto": "https"},
+            "https://[fe80::1]:8767/pcap/",
+        ),
+        # Not a scheme: fall back to the one the request arrived on.
+        (
+            {"Host": "10.0.0.5:8766", "X-Forwarded-Proto": "javascript"},
+            "http://10.0.0.5:8766/pcap/",
+        ),
+        # A Host that is not a plain host[:port] gets no link or curl command.
+        ({"Host": "evil'; rm -rf ~; echo '"}, None),
+    ],
+)
+@respx.mock
+async def test_pcap_download_link_sanitises_forwarded_headers(
+    mcp, monkeypatch, tmp_path, headers, expected
+):
+    from wlanpi_mcp.capture import storage
+    from wlanpi_mcp.config import Settings
+    from wlanpi_mcp.tools import capture_file
+
+    settings = Settings(PCAP_CAPTURE_DIR=str(tmp_path), _env_file=None)
+    monkeypatch.setattr(storage, "get_settings", lambda: settings)
+    monkeypatch.setattr(capture_file, "get_settings", lambda: settings)
+    (tmp_path / "capture-20261003T120000-cap_h.pcapng").write_bytes(b"x")
+    respx.get(DEVICE_INFO_URL).mock(return_value=httpx.Response(200, json={}))
+    call = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "get_pcap_download_url",
+            "arguments": {"capture_id": "cap_h"},
+        },
+    }
+    async with _serve(mcp) as http:
+        response = await http.post(
+            "/mcp",
+            json=call,
+            headers={"Authorization": "Bearer t", **headers, **MCP_HEADERS},
+        )
+    result = response.json()["result"]["structuredContent"]
+    if expected is None:
+        assert "download_url" not in result and "curl" not in result
+        assert result["download_path"].startswith("/pcap/")
+    else:
+        assert result["download_url"].startswith(expected)
+        # IPv6 brackets are quoted for the shell; -g stops curl globbing them.
+        args = shlex.split(result["curl"])
+        assert args[0] == "curl" and "g" in args[1]
+        assert args[-1] == result["download_url"]

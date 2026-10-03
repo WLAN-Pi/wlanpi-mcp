@@ -5,6 +5,7 @@ import base64
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import EmbeddedResource
@@ -24,6 +25,7 @@ from tests.test_capture_tools import (
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import CaptureSocket
+from wlanpi_mcp.client.core_client import CoreAPIError
 from wlanpi_mcp.config import Settings
 from wlanpi_mcp.tools import capture_file
 
@@ -463,11 +465,44 @@ async def test_download_link_is_not_minted_when_core_rejects_the_token(capdir):
     pcap.write_bytes(b"\x0a\x0d\x0d\x0a" * 8)
 
     async def refuse(*_args, **_kwargs):
-        raise RuntimeError("401 Unauthorized")
+        raise _core_error(401, "Invalid token")
 
     tools = _register_with_core(refuse)._tool_manager._tools
     result = await tools["get_pcap_download_url"].run({"capture_id": "cap_abc"})
     assert "refused this token" in result["error"]
+    assert "Invalid token" in result["error"]
+    assert capture_file._TICKETS == {}
+
+
+def _core_error(status, detail):
+    request = httpx.Request("GET", "https://localhost:31415/api/v1/system/device/info")
+    return CoreAPIError(
+        httpx.Response(status, json={"detail": detail}, request=request)
+    )
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (_core_error(500, "boom"), "could not check the token with wlanpi-core"),
+        (httpx.ConnectError("refused"), "could not reach wlanpi-core"),
+    ],
+)
+async def test_download_link_does_not_blame_the_token_for_core_failures(
+    capdir, failure, expected
+):
+    # Only a 401/403 means the token was refused; a 500 or a dead core must
+    # say so instead of sending the user off to get a new JWT.
+    tmp_path, _ = capdir
+    (tmp_path / "capture-20261003T120000-cap_abc.pcapng").write_bytes(b"x")
+
+    async def fail(*_args, **_kwargs):
+        raise failure
+
+    tools = _register_with_core(fail)._tool_manager._tools
+    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_abc"})
+    assert result["error"].startswith(expected)
+    assert "refused this token" not in result["error"]
     assert capture_file._TICKETS == {}
 
 
@@ -511,5 +546,26 @@ async def test_download_link_warns_while_the_capture_is_running(capdir):
     assert start["status"] == "running"
     await asyncio.sleep(0.05)  # let the background task write the first bytes
     result = await tools["get_pcap_download_url"].run({"capture_id": "cap_run"})
+    assert result["status"] == "running"
+    assert "partial" in result["warning"]
+
+
+async def test_download_link_warns_when_a_running_capture_is_named_by_path(capdir):
+    tmp_path, _ = capdir
+    pcap = tmp_path / "capture-20261003T120000-cap_live.pcapng"
+    pcap.write_bytes(b"\x0a\x0d\x0d\x0a")
+    capture_file._CAPTURES["cap_live"] = capture_file.FileCapture(
+        session_id="cap_live",
+        interface="wlanpi0",
+        path=str(pcap),
+        duration_s=60,
+        started_at=0.0,
+        stop_event=asyncio.Event(),
+    )
+    try:
+        tools = _register_with_core(_ok)._tool_manager._tools
+        result = await tools["get_pcap_download_url"].run({"path": str(pcap)})
+    finally:
+        capture_file._CAPTURES.pop("cap_live", None)
     assert result["status"] == "running"
     assert "partial" in result["warning"]
