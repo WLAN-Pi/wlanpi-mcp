@@ -202,3 +202,86 @@ async def test_transport_populates_request_header_token(mcp):
         assert route.calls[0].request.headers["Authorization"] == "Bearer header.token"
     finally:
         current_token.reset(reset)
+
+
+@respx.mock
+async def test_pcap_download_link_serves_the_file_once_without_a_jwt(
+    mcp, monkeypatch, tmp_path
+):
+    # The point of the link: an agent saves a pcap with plain curl, the bytes
+    # never pass through the MCP result, and curl needs no JWT. The ticket is
+    # minted by an authenticated tool call, works once, then 404s.
+    from wlanpi_mcp.capture import storage
+    from wlanpi_mcp.config import Settings
+    from wlanpi_mcp.tools import capture_file
+
+    settings = Settings(PCAP_CAPTURE_DIR=str(tmp_path), _env_file=None)
+    monkeypatch.setattr(storage, "get_settings", lambda: settings)
+    monkeypatch.setattr(capture_file, "get_settings", lambda: settings)
+    capture_file._TICKETS.clear()
+    data = b"\x0a\x0d\x0d\x0a" + bytes(range(256)) * 4
+    pcap = tmp_path / "capture-20261003T120000-cap_e2e.pcapng"
+    pcap.write_bytes(data)
+    respx.get(DEVICE_INFO_URL).mock(
+        return_value=httpx.Response(200, json={"hostname": "wlanpi-9be"})
+    )
+
+    call = {
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {
+            "name": "get_pcap_download_url",
+            "arguments": {"capture_id": "cap_e2e"},
+        },
+    }
+    async with _serve(mcp) as http:
+        response = await http.post(
+            "/mcp",
+            json=call,
+            headers={
+                "Authorization": "Bearer core.jwt.abc123",
+                "Host": "wlanpi-9be.local:8767",
+                "X-Forwarded-Proto": "https",
+                **MCP_HEADERS,
+            },
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()["result"]["structuredContent"]
+        url = result["download_url"]
+        assert url.startswith("https://wlanpi-9be.local:8767/pcap/")
+        assert result["size_bytes"] == len(data)
+        assert url in result["curl"] and result["curl"].startswith("curl -sfk -o ")
+        route = url.removeprefix("https://wlanpi-9be.local:8767")
+
+        first = await http.get(route)  # no Authorization header
+        assert first.status_code == 200
+        assert first.content == data
+        assert first.headers["content-type"] == capture_file.PCAP_MIME
+
+        again = await http.get(route)
+        assert again.status_code == 404
+
+        bogus = await http.get("/pcap/not-a-ticket")
+        assert bogus.status_code == 404
+
+        # Everything else still needs the Bearer token.
+        still_gated = await http.post("/mcp", json=_initialize(), headers=MCP_HEADERS)
+        assert still_gated.status_code == 401
+
+
+async def test_expired_pcap_download_link_is_refused(mcp, monkeypatch, tmp_path):
+    from wlanpi_mcp.capture import storage
+    from wlanpi_mcp.config import Settings
+    from wlanpi_mcp.tools import capture_file
+
+    settings = Settings(PCAP_CAPTURE_DIR=str(tmp_path), _env_file=None)
+    monkeypatch.setattr(storage, "get_settings", lambda: settings)
+    pcap = tmp_path / "capture-20261003T120000-cap_old.pcapng"
+    pcap.write_bytes(b"\x0a\x0d\x0d\x0a")
+    capture_file._TICKETS.clear()
+    capture_file._TICKETS["stale"] = (str(pcap.resolve()), 1.0)  # long expired
+    async with _serve(mcp) as http:
+        response = await http.get("/pcap/stale")
+    assert response.status_code == 404
+    assert capture_file._TICKETS == {}

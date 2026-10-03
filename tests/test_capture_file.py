@@ -418,3 +418,98 @@ async def test_list_includes_on_disk_files_after_registry_loss(capdir):
     record = listing["captures"][0]
     assert record["status"] == "on_disk"
     assert record["capture_id"] == "cap_orphan"
+
+
+# ── get_pcap_download_url ────────────────────────────────────────────────────
+
+
+def _register_with_core(core_get):
+    client = MagicMock()
+    client.current_token = MagicMock(return_value="fake.jwt.token")
+    client.get = core_get
+    mcp = FastMCP("test")
+    capture_file.register(mcp, client)
+    return mcp
+
+
+@pytest.fixture(autouse=True)
+def _clean_tickets():
+    capture_file._TICKETS.clear()
+    yield
+    capture_file._TICKETS.clear()
+
+
+async def _ok(*_args, **_kwargs):
+    return {"hostname": "wlanpi-test"}
+
+
+async def test_download_link_needs_an_identifier(capdir):
+    tools = _register_with_core(_ok)._tool_manager._tools
+    result = await tools["get_pcap_download_url"].run({})
+    assert result == {"error": "pass capture_id or path"}
+    assert capture_file._TICKETS == {}
+
+
+async def test_download_link_refuses_a_path_outside_the_capture_dir(capdir):
+    tools = _register_with_core(_ok)._tool_manager._tools
+    result = await tools["get_pcap_download_url"].run({"path": "/etc/passwd"})
+    assert "outside the managed capture directory" in result["error"]
+    assert capture_file._TICKETS == {}
+
+
+async def test_download_link_is_not_minted_when_core_rejects_the_token(capdir):
+    tmp_path, _ = capdir
+    pcap = tmp_path / "capture-20261003T120000-cap_abc.pcapng"
+    pcap.write_bytes(b"\x0a\x0d\x0d\x0a" * 8)
+
+    async def refuse(*_args, **_kwargs):
+        raise RuntimeError("401 Unauthorized")
+
+    tools = _register_with_core(refuse)._tool_manager._tools
+    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_abc"})
+    assert "refused this token" in result["error"]
+    assert capture_file._TICKETS == {}
+
+
+async def test_download_link_without_http_context_returns_path_size_and_hash(capdir):
+    import hashlib
+
+    tmp_path, _ = capdir
+    data = b"\x0a\x0d\x0d\x0a" + bytes(range(200))
+    pcap = tmp_path / "capture-20261003T120000-cap_abc.pcapng"
+    pcap.write_bytes(data)
+    tools = _register_with_core(_ok)._tool_manager._tools
+    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_abc"})
+    assert result["capture_id"] == "cap_abc"
+    assert result["filename"] == pcap.name
+    assert result["size_bytes"] == len(data)
+    assert result["sha256"] == hashlib.sha256(data).hexdigest()
+    assert result["single_use"] is True
+    assert result["download_path"].startswith(capture_file.DOWNLOAD_PREFIX)
+    assert "download_url" not in result
+    ticket = result["download_path"].removeprefix(capture_file.DOWNLOAD_PREFIX)
+    assert capture_file._TICKETS[ticket][0] == str(pcap.resolve())
+
+
+async def test_download_link_warns_while_the_capture_is_running(capdir):
+    _, use = capdir
+    use(
+        BlockingWS(
+            [
+                AUTH_OK,
+                sessions_event(),
+                CONFIG_APPLIED,
+                started_event("cap_run"),
+                *pcapng_chunks(BEACON_A),
+            ]
+        )
+    )
+    tools = _register_with_core(_ok)._tool_manager._tools
+    start = await tools["start_pcap_file"].fn(
+        interface="wlanpi0", channels=[6], duration_s=60
+    )
+    assert start["status"] == "running"
+    await asyncio.sleep(0.05)  # let the background task write the first bytes
+    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_run"})
+    assert result["status"] == "running"
+    assert "partial" in result["warning"]
