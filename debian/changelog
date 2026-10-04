@@ -1,3 +1,21 @@
+wlanpi-mcp (0.6.17-3) unstable; urgency=medium
+
+  * New get_profiler_reports tool returns the profiler's client results:
+    parsed JSON profiles inline (default), one single-use download link
+    per file, or one link to a zip. Filter by mac and max_clients. It reads
+    /var/www/html/profiler directly until wlanpi-core serves the data
+    (WLAN-Pi/wlanpi-core#378, migration tracked in #58); every call still
+    has wlanpi-core accept the caller's JWT first. (#61)
+  * stop_profiler's description now says it returns only {"success": bool}
+    and points to get_profiler_reports for results. (#61)
+  * New get_pcap_download_url tool returns a single-use, short-lived link and
+    a curl command, so a capture can be saved to disk without passing it
+    through the conversation as base64. (#55)
+  * The one-time link JWT check and base URL helpers now live in
+    download_links.py, shared by both link tools. (#60)
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Sun, 04 Oct 2026 21:44:07 +0000
+
 wlanpi-mcp (0.6.17-2) unstable; urgency=medium
 
   * create_network_config and update_network_config publish a typed input
