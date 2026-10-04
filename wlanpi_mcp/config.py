@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     PCAP_CAPTURE_DIR: str = "/tmp/wlanpi-mcp/captures"
     # Ceiling on a single file capture's duration, in seconds.
     PCAP_MAX_DURATION_S: int = 3600
+    # Where wlanpi-profiler writes its results (clients/, reports/). Read
+    # directly by get_profiler_reports until wlanpi-core serves them
+    # (WLAN-Pi/wlanpi-core#378, WLAN-Pi/wlanpi-mcp#58).
+    PROFILER_DATA_DIR: str = "/var/www/html/profiler"
 
     model_config = SettingsConfigDict(
         env_file="/etc/wlanpi-mcp/config.env",
