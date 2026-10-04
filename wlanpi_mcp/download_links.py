@@ -1,13 +1,13 @@
 """
 Shared pieces of the one-time download links.
 
-get_pcap_download_url (tools/capture_file.py) hands an agent a short-lived,
-single-use link on this server's own host and port, so a file can be saved
-with plain curl instead of passing through the conversation. A tool that
-mints such links keeps its own ticket store and route; what any of them
-needs lives here: checking the caller's JWT with wlanpi-core before minting
-(the link itself carries none), and building a safe base URL from the
-request that asked for it.
+get_pcap_download_url (tools/capture_file.py) and get_profiler_reports
+(tools/profiler_reports.py) both hand an agent a short-lived, single-use link
+on this server's own host and port, so a file can be saved with plain curl
+instead of passing through the conversation. Each tool keeps its own ticket
+store and route; what they share lives here: checking the caller's JWT with
+wlanpi-core before minting (the link itself carries none), and building a
+safe base URL from the request that asked for it.
 """
 
 import re

@@ -104,7 +104,14 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool(annotations=hints.DESTRUCTIVE)
     async def stop_profiler() -> dict[str, Any]:
-        """Stop the wlanpi-profiler and return summary results."""
+        """
+        Stop the wlanpi-profiler.
+
+        Returns {"success": bool}. success false means no profiler started by
+        wlanpi-core was running (nothing to stop), not that stopping failed.
+        This returns no client data: call get_profiler_reports for the
+        profiles the run captured.
+        """
         return await client.post("/api/v1/profiler/stop")
 
     @mcp.tool(annotations=hints.DESTRUCTIVE)
