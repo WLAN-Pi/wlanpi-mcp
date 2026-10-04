@@ -23,7 +23,6 @@ import glob
 import hashlib
 import logging
 import os
-import re
 import secrets
 import shlex
 import time
@@ -31,12 +30,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from mcp.server.fastmcp.exceptions import ToolError
-from mcp.server.lowlevel.server import request_ctx
 from mcp.types import BlobResourceContents, EmbeddedResource
 from pydantic import AnyUrl
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
+from wlanpi_mcp import download_links
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import (
@@ -45,7 +44,7 @@ from wlanpi_mcp.capture.ws_client import (
     connect_capture,
     sessions_on_interface,
 )
-from wlanpi_mcp.client.core_client import CoreAPIError, CoreClient
+from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.config import get_settings
 from wlanpi_mcp.tools import hints
 from wlanpi_mcp.tools.capture import (
@@ -68,7 +67,7 @@ PCAP_MIME = "application/vnd.tcpdump.pcapng"
 DOWNLOAD_PREFIX = "/pcap/"
 
 #: How long a download ticket stays valid, in seconds. Single use either way.
-DOWNLOAD_TTL_S = 300
+DOWNLOAD_TTL_S = download_links.DOWNLOAD_TTL_S
 
 #: One-time download tickets: ticket -> (resolved file path, expiry epoch).
 #: In memory only; a daemon restart drops them, which is fine for a link that
@@ -238,41 +237,6 @@ def _sha256(path: str) -> str:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-#: What a Host header may look like before it goes into a link and a shell
-#: command: a DNS name, an IPv4 address or a bracketed IPv6 address, with an
-#: optional port. Anything else gets no link (download_path only).
-_HOST_RE = re.compile(
-    r"^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$"
-)
-
-
-def _request_base_url() -> str | None:
-    """
-    Return scheme://host[:port] as the MCP client reached this server.
-
-    nginx forwards the client's Host header and sets X-Forwarded-Proto, so a
-    link built from them works from the client's side (e.g.
-    https://wlanpi-9be.local:8767). None outside an HTTP request (stdio), or
-    when the Host header is not a plain host[:port].
-    """
-    try:
-        ctx = request_ctx.get()
-    except LookupError:
-        return None
-    request = getattr(ctx, "request", None)
-    if request is None:
-        return None
-    headers = request.headers
-    host = headers.get("host", "")
-    if not _HOST_RE.match(host):
-        return None
-    # Behind more than one proxy this is a list; the first hop is the client's.
-    proto = headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
-    if proto not in ("http", "https"):
-        proto = request.url.scheme
-    return f"{proto}://{host}"
 
 
 def _capture_for_path(resolved: str) -> FileCapture | None:
@@ -628,16 +592,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             return {"error": f"no such capture file: {file_path}"}
 
         # The link itself carries no JWT, so check this caller's token with
-        # wlanpi-core before minting one: a link is only as good as the call
-        # that asked for it.
-        try:
-            await client.get("/api/v1/system/device/info")
-        except CoreAPIError as exc:
-            if exc.status_code in (401, 403):
-                return {"error": f"wlanpi-core refused this token: {exc}"}
-            return {"error": f"could not check the token with wlanpi-core: {exc}"}
-        except Exception as exc:  # noqa: BLE001 - surfaced to the caller
-            return {"error": f"could not reach wlanpi-core to check the token: {exc}"}
+        # wlanpi-core before minting one.
+        if (token_error := await download_links.check_token(client)) is not None:
+            return {"error": token_error}
 
         now = time.time()
         _prune_tickets(now)
@@ -646,7 +603,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
         filename = os.path.basename(resolved)
         route = f"{DOWNLOAD_PREFIX}{ticket}"
-        base = _request_base_url()
+        base = download_links.request_base_url()
         entry = _capture_for_path(resolved)
         result: dict[str, Any] = {
             "capture_id": capture_id or storage.session_from_filename(filename),
