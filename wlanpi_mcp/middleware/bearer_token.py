@@ -12,8 +12,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from wlanpi_mcp.auth.token_context import current_token
 
 #: Path prefixes served without a Bearer token because the route itself checks
-#: a one-time ticket (tools/capture_file.py, DOWNLOAD_PREFIX). Keep in sync.
-TICKET_PATH_PREFIXES = ("/pcap/",)
+#: a one-time ticket (tools/capture_file.py DOWNLOAD_PREFIX,
+#: tools/profiler_reports.py REPORT_PREFIX). Keep in sync.
+TICKET_PATH_PREFIXES = ("/pcap/", "/profiler-report/")
 
 
 def _principal_for(token: str) -> AuthenticatedUser:
@@ -70,8 +71,8 @@ class BearerTokenMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # One-time pcap download links carry no JWT: the route admits only a
-        # ticket minted by an authenticated get_pcap_download_url call.
+        # One-time download links carry no JWT: the route admits only a
+        # ticket minted by an authenticated tool call.
         if scope.get("path", "").startswith(TICKET_PATH_PREFIXES):
             await self.app(scope, receive, send)
             return

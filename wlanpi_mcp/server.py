@@ -17,6 +17,7 @@ from wlanpi_mcp.tools import (
     netconfig,
     network,
     profiler,
+    profiler_reports,
     system,
     utils,
     vlan,
@@ -70,6 +71,8 @@ def create_server(
     wlan.register(mcp, client)
     vlan.register(mcp, client)
     profiler.register(mcp, client)
+    # Reads the profiler's files directly until core serves them (#58)
+    profiler_reports.register(mcp, client)
     bluetooth.register(mcp, client)
     netconfig.register(mcp, client)
     wifi.register(mcp, client)

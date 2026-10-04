@@ -288,18 +288,80 @@ async def test_expired_pcap_download_link_is_refused(mcp, monkeypatch, tmp_path)
     assert capture_file._TICKETS == {}
 
 
-def test_pcap_download_route_is_the_only_route_without_a_jwt(mcp):
+@respx.mock
+async def test_profiler_report_links_serve_each_file_once_without_a_jwt(
+    mcp, monkeypatch, tmp_path
+):
+    # get_profiler_reports(output="links") mints a ticket per file through an
+    # authenticated /mcp call; plain curl then fetches each one once.
+    from wlanpi_mcp.config import Settings
+    from wlanpi_mcp.tools import profiler_reports
+
+    settings = Settings(PROFILER_DATA_DIR=str(tmp_path), _env_file=None)
+    monkeypatch.setattr(profiler_reports, "get_settings", lambda: settings)
+    profiler_reports._TICKETS.clear()
+    client_dir = tmp_path / "clients" / "aa-bb-cc-dd-ee-ff"
+    client_dir.mkdir(parents=True)
+    (client_dir / "aa-bb-cc-dd-ee-ff_5GHz.json").write_text('{"mac": "x"}')
+    (client_dir / "aa-bb-cc-dd-ee-ff_5GHz.pcap").write_bytes(b"\xd4\xc3\xb2\xa1")
+    (tmp_path / "reports").mkdir()
+    respx.get(DEVICE_INFO_URL).mock(return_value=httpx.Response(200, json={}))
+    call = {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {"name": "get_profiler_reports", "arguments": {"output": "links"}},
+    }
+    async with _serve(mcp) as http:
+        response = await http.post(
+            "/mcp",
+            json=call,
+            headers={
+                "Authorization": "Bearer core.jwt.abc123",
+                "Host": "wlanpi-9be.local:8767",
+                "X-Forwarded-Proto": "https",
+                **MCP_HEADERS,
+            },
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()["result"]["structuredContent"]
+        files = {f["path"]: f["download_url"] for f in result["files"]}
+        pcap_url = files["clients/aa-bb-cc-dd-ee-ff/aa-bb-cc-dd-ee-ff_5GHz.pcap"]
+        assert pcap_url.startswith("https://wlanpi-9be.local:8767/profiler-report/")
+        route = pcap_url.removeprefix("https://wlanpi-9be.local:8767")
+
+        first = await http.get(route)  # no Authorization header
+        assert first.status_code == 200
+        assert first.content == b"\xd4\xc3\xb2\xa1"
+        assert first.headers["content-type"] == "application/vnd.tcpdump.pcap"
+        assert "aa-bb-cc-dd-ee-ff_5GHz.pcap" in first.headers["content-disposition"]
+
+        assert (await http.get(route)).status_code == 404
+        assert (await http.get("/profiler-report/nope")).status_code == 404
+    # The core token check ran with the caller's own JWT.
+    assert respx.calls[0].request.headers["Authorization"] == "Bearer core.jwt.abc123"
+
+
+def test_ticket_download_routes_are_the_only_routes_without_a_jwt(mcp):
     # BearerTokenMiddleware exempts everything under TICKET_PATH_PREFIXES, so
     # any other route added there would be served without authentication.
     from wlanpi_mcp.middleware.bearer_token import TICKET_PATH_PREFIXES
-    from wlanpi_mcp.tools import capture_file
+    from wlanpi_mcp.tools import capture_file, profiler_reports
 
-    exempt = [
+    exempt = sorted(
         route.path
         for route in mcp.streamable_http_app().routes
         if route.path.startswith(TICKET_PATH_PREFIXES)
-    ]
-    assert exempt == [capture_file.DOWNLOAD_PREFIX + "{ticket}"]
+    )
+    assert exempt == sorted(
+        [
+            capture_file.DOWNLOAD_PREFIX + "{ticket}",
+            profiler_reports.REPORT_PREFIX + "{ticket}",
+        ]
+    )
+    assert sorted(TICKET_PATH_PREFIXES) == sorted(
+        [capture_file.DOWNLOAD_PREFIX, profiler_reports.REPORT_PREFIX]
+    )
 
 
 @pytest.mark.parametrize(
