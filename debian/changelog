@@ -1,3 +1,16 @@
+wlanpi-mcp (0.6.17-4) unstable; urgency=medium
+
+  * New read-only tool get_wlan_link wraps wlanpi-core's
+    GET /api/v1/network/interfaces/{iface}/wlan-link: whether a client is
+    associated, and for a Wi-Fi 7 MLO client the AP MLD and its set-up links
+    with link_id, bssid, freq_mhz, active, local_addr, and width_mhz and
+    center1_mhz for active links (WLAN-Pi/wlanpi-core#359). Agents can check
+    an MLO association in one small call; get_network_config_status reports
+    channel null for an MLD, and both it and activate_network_config now
+    point to get_wlan_link. (#52)
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Mon, 05 Oct 2026 03:17:57 +0000
+
 wlanpi-mcp (0.6.17-3) unstable; urgency=medium
 
   * New get_profiler_reports tool returns the profiler's client results:
