@@ -20,8 +20,11 @@ core capture WebSocket: no local subprocess, no other transport, same JWT.
 import asyncio
 import base64
 import glob
+import hashlib
 import logging
 import os
+import secrets
+import shlex
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -29,7 +32,10 @@ from typing import Any
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import BlobResourceContents, EmbeddedResource
 from pydantic import AnyUrl
+from starlette.requests import Request
+from starlette.responses import FileResponse, JSONResponse, Response
 
+from wlanpi_mcp import download_links
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import (
@@ -54,6 +60,19 @@ from wlanpi_mcp.tools.capture import (
 log = logging.getLogger(__name__)
 
 PCAP_MIME = "application/vnd.tcpdump.pcapng"
+
+#: URL prefix of the one-time pcap download route. BearerTokenMiddleware lets
+#: requests under it through without a JWT: the route itself admits only a
+#: ticket minted by get_pcap_download_url, an authenticated tool call.
+DOWNLOAD_PREFIX = "/pcap/"
+
+#: How long a download ticket stays valid, in seconds. Single use either way.
+DOWNLOAD_TTL_S = download_links.DOWNLOAD_TTL_S
+
+#: One-time download tickets: ticket -> (resolved file path, expiry epoch).
+#: In memory only; a daemon restart drops them, which is fine for a link that
+#: is meant to be used straight away.
+_TICKETS: dict[str, tuple[str, float]] = {}
 
 
 @dataclass
@@ -203,6 +222,29 @@ async def _run_file_capture(
             log.debug("best-effort stop failed: %r", exc)
         await sock.close()
         entry.ended_at = time.time()
+
+
+def _prune_tickets(now: float) -> None:
+    """Drop expired download tickets."""
+    for ticket in [t for t, (_, exp) in _TICKETS.items() if exp <= now]:
+        _TICKETS.pop(ticket, None)
+
+
+def _sha256(path: str) -> str:
+    """Return the hex SHA-256 of a file, read in chunks."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _capture_for_path(resolved: str) -> FileCapture | None:
+    """Return the registry entry writing this file, if any."""
+    for entry in _CAPTURES.values():
+        if os.path.realpath(entry.path) == resolved:
+            return entry
+    return None
 
 
 def register(mcp: FastMCP, client: CoreClient) -> None:
@@ -493,4 +535,120 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                 mimeType=PCAP_MIME,
                 blob=blob,
             ),
+        )
+
+    @mcp.tool(annotations=hints.READ_ONLY)
+    async def get_pcap_download_url(
+        capture_id: str | None = None,
+        path: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Get a one-time HTTPS link to download a capture's pcapng file straight to disk.
+
+        Prefer this to fetch_pcap_file whenever you can run a shell command:
+        fetch_pcap_file returns the whole file as base64 inside the tool
+        result (about 1.33x the file size, all of it in your context), while
+        this returns a short link and a ready-made 'curl' command that saves
+        the file locally without passing it through the conversation. Run the
+        'curl' command as given, then check the file's size (or 'sha256';
+        the hash is of the file when the link was made, so it only matches a
+        capture that had already stopped).
+
+        The link works once and expires after 'expires_in_s' seconds; ask for
+        a new one if it lapses. It is served on the same host and port as this
+        MCP server, with the device's self-signed certificate (hence curl -k).
+        Fetch after the capture has stopped ('status' is not 'running') for a
+        complete file. Only files in the managed capture directory are served.
+
+        Args:
+            capture_id: The capture_id from start_pcap_file/list_pcap_files
+                (also the capture_scan/capture_observe tee files).
+            path: Alternatively, the on-device file path (must be inside the
+                managed capture directory).
+        """
+        if capture_id:
+            file_path = _resolve_session_path(capture_id)
+            if file_path is None:
+                return {
+                    "error": (
+                        f"no capture file for capture_id '{capture_id}'. "
+                        "See list_pcap_files."
+                    )
+                }
+        elif path:
+            file_path = path
+        else:
+            return {"error": "pass capture_id or path"}
+
+        if not _within_capture_dir(file_path):
+            return {
+                "error": (
+                    "refusing to serve a path outside the managed capture "
+                    f"directory ({_capture_dir()})"
+                )
+            }
+        resolved = os.path.realpath(file_path)
+        if not os.path.isfile(resolved):
+            return {"error": f"no such capture file: {file_path}"}
+
+        # The link itself carries no JWT, so check this caller's token with
+        # wlanpi-core before minting one.
+        if (token_error := await download_links.check_token(client)) is not None:
+            return {"error": token_error}
+
+        now = time.time()
+        _prune_tickets(now)
+        ticket = secrets.token_urlsafe(24)
+        _TICKETS[ticket] = (resolved, now + DOWNLOAD_TTL_S)
+
+        filename = os.path.basename(resolved)
+        route = f"{DOWNLOAD_PREFIX}{ticket}"
+        base = download_links.request_base_url()
+        entry = _capture_for_path(resolved)
+        result: dict[str, Any] = {
+            "capture_id": capture_id or storage.session_from_filename(filename),
+            "filename": filename,
+            "size_bytes": _safe_size(resolved),
+            # Off the event loop: a long capture is a lot to hash on a Pi.
+            "sha256": await asyncio.to_thread(_sha256, resolved),
+            "expires_in_s": DOWNLOAD_TTL_S,
+            "single_use": True,
+        }
+        if entry is not None:
+            result["status"] = entry.status
+            if entry.status == "running":
+                result["warning"] = (
+                    "capture still running: the file is partial. Wait for it "
+                    "to finish (or stop_pcap_file), then ask for a new link."
+                )
+        if base:
+            url = f"{base}{route}"
+            result["download_url"] = url
+            result["curl"] = (
+                f"curl -gsSfk -o {shlex.quote(filename)} {shlex.quote(url)}"
+            )
+        else:
+            result["download_path"] = route
+            result["note"] = (
+                "no HTTP request context (stdio): prefix download_path with "
+                "this server's https://host:port"
+            )
+        return result
+
+    @mcp.custom_route(DOWNLOAD_PREFIX + "{ticket}", methods=["GET"])
+    async def download_pcap(request: Request) -> Response:
+        """Serve one capture file for a valid, unused, unexpired ticket."""
+        now = time.time()
+        _prune_tickets(now)
+        entry = _TICKETS.pop(request.path_params.get("ticket", ""), None)
+        if entry is None:
+            return JSONResponse(
+                {"detail": "unknown, used or expired download link"},
+                status_code=404,
+            )
+        file_path, _expires = entry
+        if not _within_capture_dir(file_path) or not os.path.isfile(file_path):
+            return JSONResponse({"detail": "capture file is gone"}, status_code=404)
+        return FileResponse(
+            file_path, media_type=PCAP_MIME, filename=os.path.basename(file_path)
         )

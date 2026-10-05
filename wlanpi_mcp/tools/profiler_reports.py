@@ -1,0 +1,452 @@
+"""
+get_profiler_reports: the per-client results wlanpi-profiler writes.
+
+SHORT-TERM EXCEPTION to the "everything through wlanpi-core" rule (see
+CLAUDE.md). wlanpi-core can start, stop and purge the profiler but has no
+endpoint that reads its results, so this module reads them straight from
+Settings.PROFILER_DATA_DIR (/var/www/html/profiler):
+
+    clients/<mac>/<mac>_<band>.json   capability profile (schema v2)
+    clients/<mac>/<mac>_<band>.txt    human-readable report
+    clients/<mac>/<mac>_<band>.pcap   the association request frame
+    reports/profiler-<date>.csv       one row per profiled client, per day
+
+The relaxation is scoped tightly: read-only, only regular files under
+clients/<mac>/ and reports/ (symlinks are skipped, paths are realpath-checked
+against the data directory), and every call still has its JWT accepted by
+wlanpi-core before anything is returned. Moving onto core endpoints is
+tracked in WLAN-Pi/wlanpi-mcp#58, which waits on WLAN-Pi/wlanpi-core#378;
+keep the tool's arguments and result shape stable for that migration.
+
+Files can come back three ways: parsed JSON profiles inline, one single-use
+link per file, or one single-use link to a zip of them all. The links reuse
+the get_pcap_download_url pattern (download_links.py) but hold a snapshot of
+the bytes in memory, so a ticket never names a path on disk.
+"""
+
+import asyncio
+import hashlib
+import io
+import json
+import logging
+import os
+import re
+import secrets
+import shlex
+import time
+import zipfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Literal
+
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+
+from wlanpi_mcp import download_links
+from wlanpi_mcp._compat import FastMCP
+from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.config import get_settings
+from wlanpi_mcp.tools import hints
+
+log = logging.getLogger(__name__)
+
+#: URL prefix of the one-time profiler report download route. Listed in
+#: BearerTokenMiddleware's TICKET_PATH_PREFIXES: the route admits only a
+#: ticket minted by an authenticated get_profiler_reports call.
+REPORT_PREFIX = "/profiler-report/"
+
+#: Most bytes one call may snapshot into memory for links or a zip. Profiles
+#: are a few KB each, so this is thousands of clients; past it, filter.
+MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024
+
+#: The profiler names a client directory after its MAC, lowercase with dashes.
+_MAC_RE = re.compile(r"^[0-9a-f]{2}(?:-[0-9a-f]{2}){5}$")
+
+_MEDIA_TYPES = {
+    ".json": "application/json",
+    ".txt": "text/plain; charset=utf-8",
+    ".pcap": "application/vnd.tcpdump.pcap",
+    ".csv": "text/csv; charset=utf-8",
+}
+_OCTET = "application/octet-stream"
+
+
+@dataclass(frozen=True)
+class _Download:
+    """A snapshot of one file (or zip) behind a single-use ticket."""
+
+    data: bytes
+    filename: str
+    media_type: str
+    expires: float
+
+
+#: One-time download tickets. In memory only; a daemon restart drops them.
+_TICKETS: dict[str, _Download] = {}
+
+
+def _prune_tickets(now: float) -> None:
+    """Drop expired download tickets."""
+    for ticket in [t for t, d in _TICKETS.items() if d.expires <= now]:
+        _TICKETS.pop(ticket, None)
+
+
+def _mint(data: bytes, filename: str, media_type: str, now: float) -> str:
+    """Store a snapshot behind a fresh ticket and return its route."""
+    ticket = secrets.token_urlsafe(24)
+    _TICKETS[ticket] = _Download(
+        data, filename, media_type, now + download_links.DOWNLOAD_TTL_S
+    )
+    return f"{REPORT_PREFIX}{ticket}"
+
+
+def _normalize_mac(mac: str) -> str | None:
+    """Return the profiler's directory name for a MAC, or None if not a MAC."""
+    digits = re.sub(r"[^0-9a-f]", "", mac.strip().lower())
+    if len(digits) != 12 or re.search(r"[^0-9a-fA-F:.\-\s]", mac):
+        return None
+    return "-".join(digits[i : i + 2] for i in range(0, 12, 2))
+
+
+def _iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, UTC).isoformat(timespec="seconds")
+
+
+def _regular_files(directory: str, root: str) -> list[os.DirEntry[str]]:
+    """List the regular, non-symlink files in a directory inside root."""
+    try:
+        entries = list(os.scandir(directory))
+    except OSError:
+        return []
+    files = []
+    for entry in entries:
+        try:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+        except OSError:
+            continue
+        resolved = os.path.realpath(entry.path)
+        if resolved.startswith(root + os.sep):
+            files.append(entry)
+    return sorted(files, key=lambda e: e.name)
+
+
+def _file_info(entry: os.DirEntry[str], root: str) -> dict[str, Any] | None:
+    try:
+        st = entry.stat(follow_symlinks=False)
+    except OSError:
+        return None
+    return {
+        "name": entry.name,
+        "path": os.path.relpath(entry.path, root),
+        "size_bytes": st.st_size,
+        "modified": _iso(st.st_mtime),
+        "_abs": entry.path,
+        "_mtime": st.st_mtime,
+    }
+
+
+def _scan(
+    root: str, mac: str | None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Return (clients newest first, session reports newest first).
+
+    Each client is {"mac", "modified", "files": [...]}; each file carries
+    private _abs/_mtime keys that are stripped before anything is returned.
+    """
+    clients = []
+    clients_dir = os.path.join(root, "clients")
+    try:
+        dirs = list(os.scandir(clients_dir))
+    except OSError:
+        dirs = []
+    for entry in dirs:
+        if not _MAC_RE.match(entry.name) or (mac and entry.name != mac):
+            continue
+        try:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+        except OSError:
+            continue
+        files = [
+            info
+            for f in _regular_files(entry.path, root)
+            if (info := _file_info(f, root)) is not None
+        ]
+        if not files:
+            continue
+        newest = max(f["_mtime"] for f in files)
+        clients.append(
+            {
+                "mac": entry.name,
+                "modified": _iso(newest),
+                "_mtime": newest,
+                "files": files,
+            }
+        )
+    clients.sort(key=lambda c: c["_mtime"], reverse=True)
+
+    reports = [
+        info
+        for f in _regular_files(os.path.join(root, "reports"), root)
+        if f.name.endswith(".csv") and (info := _file_info(f, root)) is not None
+    ]
+    reports.sort(key=lambda r: r["_mtime"], reverse=True)
+    return clients, reports
+
+
+def _public(info: dict[str, Any]) -> dict[str, Any]:
+    """Drop the private scan keys from a file or client record."""
+    return {k: v for k, v in info.items() if not k.startswith("_")}
+
+
+def _band(name: str, mac: str) -> str | None:
+    """'aa-..-ff_5GHz.json' -> '5GHz'; None when the profiler wrote no band."""
+    stem = os.path.splitext(name)[0]
+    return stem.removeprefix(mac).removeprefix("_") or None
+
+
+def _load_profiles(client: dict[str, Any], include_frame: bool) -> dict[str, Any]:
+    """Parse one client's JSON profiles (one per band it was seen on)."""
+    profiles = []
+    for f in client["files"]:
+        if not f["name"].endswith(".json"):
+            continue
+        try:
+            with open(f["_abs"], encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError) as exc:
+            profiles.append({"file": f["path"], "error": f"unreadable: {exc}"})
+            continue
+        if not isinstance(data, dict):
+            profiles.append({"file": f["path"], "error": "not a JSON object"})
+            continue
+        if not include_frame:
+            data.pop("pcapng", None)
+        profiles.append(
+            {
+                "file": f["path"],
+                "band": _band(f["name"], client["mac"]),
+                "modified": f["modified"],
+                **data,
+            }
+        )
+    return {"mac": client["mac"], "modified": client["modified"], "profiles": profiles}
+
+
+def _read_all(files: list[dict[str, Any]]) -> list[tuple[dict[str, Any], bytes]]:
+    """Read each file's bytes, skipping any that vanish mid-call."""
+    out = []
+    for f in files:
+        try:
+            with open(f["_abs"], "rb") as fh:
+                out.append((f, fh.read()))
+        except OSError as exc:
+            log.warning("profiler report %s unreadable: %s", f["path"], exc)
+    return out
+
+
+def _zip(blobs: list[tuple[dict[str, Any], bytes]]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f, data in blobs:
+            # Keep each file's own mtime (when the client was profiled), not
+            # the time the zip was built. Zip times are local, 2 s, >= 1980.
+            stamp = time.localtime(max(f["_mtime"], 315532800))[:6]
+            info = zipfile.ZipInfo(f"profiler/{f['path']}", date_time=stamp)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            zf.writestr(info, data)
+    return buf.getvalue()
+
+
+def _curl(pairs: list[tuple[str, str]]) -> str:
+    """One curl command saving each (local path, url) pair."""
+    parts = ["curl -gsSfk --create-dirs"]
+    for path, url in pairs:
+        parts.append(f"-o {shlex.quote(path)} {shlex.quote(url)}")
+    return " ".join(parts)
+
+
+def register(mcp: FastMCP, client: CoreClient) -> None:
+    """Register get_profiler_reports and its download route."""
+
+    @mcp.tool(annotations=hints.READ_ONLY)
+    async def get_profiler_reports(
+        mac: str | None = None,
+        output: Literal["json", "links", "zip"] = "json",
+        max_clients: int = 25,
+        include_frame: bool = False,
+        include_session_csv: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Get the client capability profiles the wlanpi-profiler has captured.
+
+        Each client the profiler saw associate gets a profile per band:
+        manufacturer (manuf, chipset), whether its MAC is randomized
+        (is_laa), what it associated to (capture_ssid/bssid/band/channel),
+        and 'features' - its 802.11 capabilities (dot11k/r/v/w, n/ac/ax/be
+        support and spatial streams, MCS ranges, channel widths, beamforming,
+        TWT, MLO/EMLSR, supported_channels, min/max power, and the RSN
+        akm/pairwise_cipher/group_cipher suite numbers). In 'features', 1
+        means supported, 0 not supported, -1 not advertised/not applicable.
+
+        Results accumulate across profiler runs until purge_profiler_data, so
+        clients are listed newest first; use 'mac' to pick one, or compare
+        'modified' against when the run started. Reading is safe while the
+        profiler runs; a client that has not finished associating may not be
+        written yet.
+
+        Args:
+            mac: Only this client (any common MAC format).
+            output: How to return the results.
+                'json' (default) - the parsed profiles inline, one entry per
+                    client with a profile per band. Best for answering
+                    questions about clients.
+                'links' - a single-use HTTPS link per file (each client's
+                    .json, .txt report and .pcap association frame, plus the
+                    daily session CSVs) and one 'curl' command that saves them
+                    all under ./profiler/. Use when the user wants the files.
+                'zip' - one single-use link to a zip of the same files, with
+                    a 'curl' command. Use for many clients or to hand the
+                    whole set over in one file.
+                Links work once, expire after 'expires_in_s' seconds, and use
+                the device's self-signed certificate (hence curl -k). Without
+                an HTTP request (stdio) you get 'download_path' to prefix
+                with this server's https://host:port instead.
+            max_clients: Most clients to return, newest first (default 25);
+                0 or less returns every client. 'truncated' says if any
+                were left out.
+            include_frame: json only - keep each profile's 'pcapng' field,
+                the base64 association request frame (off by default: large
+                and rarely needed inline; the .pcap comes with links/zip).
+            include_session_csv: links/zip only - include the daily
+                reports/profiler-<date>.csv summaries (default true). Not
+                filtered by mac or max_clients.
+
+        Returns {"clients": [...], "total_clients", "returned_clients",
+        "truncated", "session_reports": [...]}, plus the link fields for
+        'links'/'zip'. No clients means the profiler has not profiled
+        anything since the data was last purged.
+        """
+        if output not in ("json", "links", "zip"):
+            return {"error": "output must be 'json', 'links' or 'zip'"}
+        wanted = None
+        if mac:
+            wanted = _normalize_mac(mac)
+            if wanted is None:
+                return {"error": f"not a MAC address: {mac!r}"}
+
+        # The files are read locally, so nothing else would check the token:
+        # wlanpi-core must accept it before any profile is returned.
+        if (token_error := await download_links.check_token(client)) is not None:
+            return {"error": token_error}
+
+        root = os.path.realpath(get_settings().PROFILER_DATA_DIR)
+        clients, reports = await asyncio.to_thread(_scan, root, wanted)
+        total = len(clients)
+        if max_clients > 0:
+            clients = clients[:max_clients]
+        result: dict[str, Any] = {
+            "total_clients": total,
+            "returned_clients": len(clients),
+            "truncated": len(clients) < total,
+        }
+        if wanted and not clients:
+            result["note"] = f"no profile for {wanted}"
+        elif total == 0:
+            result["note"] = (
+                "no client profiles: the profiler has not profiled a client "
+                "since its data was last purged"
+            )
+
+        if output == "json":
+            result["clients"] = [
+                await asyncio.to_thread(_load_profiles, c, include_frame)
+                for c in clients
+            ]
+            result["session_reports"] = [_public(r) for r in reports]
+            return result
+
+        files = [f for c in clients for f in c["files"]]
+        if include_session_csv:
+            files += reports
+        size = sum(f["size_bytes"] for f in files)
+        if size > MAX_DOWNLOAD_BYTES:
+            return {
+                "error": (
+                    f"{len(files)} files, {size} bytes: over the "
+                    f"{MAX_DOWNLOAD_BYTES} byte limit for one call. Narrow "
+                    "it with mac or max_clients, or include_session_csv=false."
+                )
+            }
+        blobs = await asyncio.to_thread(_read_all, files)
+
+        now = time.time()
+        _prune_tickets(now)
+        base = download_links.request_base_url()
+        result["expires_in_s"] = download_links.DOWNLOAD_TTL_S
+        result["single_use"] = True
+        result["clients"] = [
+            {"mac": c["mac"], "modified": c["modified"]} for c in clients
+        ]
+
+        def link(route: str) -> dict[str, str]:
+            if base:
+                return {"download_url": f"{base}{route}"}
+            return {"download_path": route}
+
+        if output == "zip":
+            data = await asyncio.to_thread(_zip, blobs)
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+            filename = f"profiler-reports-{stamp}.zip"
+            route = _mint(data, filename, "application/zip", now)
+            result.update(
+                {
+                    "filename": filename,
+                    "size_bytes": len(data),
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                    "files": [f["path"] for f, _ in blobs],
+                    **link(route),
+                }
+            )
+            if base:
+                result["curl"] = _curl([(filename, f"{base}{route}")])
+        else:
+            entries = []
+            pairs = []
+            for f, data in blobs:
+                media = _MEDIA_TYPES.get(os.path.splitext(f["name"])[1], _OCTET)
+                route = _mint(data, f["name"], media, now)
+                entries.append(
+                    {"path": f["path"], "size_bytes": len(data), **link(route)}
+                )
+                if base:
+                    pairs.append((f"profiler/{f['path']}", f"{base}{route}"))
+            result["files"] = entries
+            if pairs:
+                result["curl"] = _curl(pairs)
+
+        if not base:
+            result["note"] = (
+                "no HTTP request context (stdio): prefix download_path with "
+                "this server's https://host:port"
+            )
+        return result
+
+    @mcp.custom_route(REPORT_PREFIX + "{ticket}", methods=["GET"])
+    async def download_profiler_report(request: Request) -> Response:
+        """Serve one snapshot for a valid, unused, unexpired ticket."""
+        _prune_tickets(time.time())
+        entry = _TICKETS.pop(request.path_params.get("ticket", ""), None)
+        if entry is None:
+            return JSONResponse(
+                {"detail": "unknown, used or expired download link"},
+                status_code=404,
+            )
+        return Response(
+            entry.data,
+            media_type=entry.media_type,
+            headers={"Content-Disposition": f'attachment; filename="{entry.filename}"'},
+        )
