@@ -118,7 +118,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         the air) and, for active links, width_mhz and center1_mhz. Only active
         links carry traffic; a set-up link can be idle. The set of links can
         change between associations. Empty for a non-MLO connection. With more
-        than one active link, freq_mhz at the top level is null. On older cores
+        than one active link, freq_mhz at the top level is null. signal_dbm is
+        null when the driver has no reading, which is common with several links
+        set up (e.g. ath12k): that is not a sign of a bad link. On older cores
         without links, freq_mhz and signal_dbm are unreliable for MLO: freq_mhz
         can name an idle link, and signal_dbm often reads 0.
 
