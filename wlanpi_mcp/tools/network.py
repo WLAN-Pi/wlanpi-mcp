@@ -117,8 +117,15 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         has its own, none equals the interface MAC, and it is the address on
         the air) and, for active links, width_mhz and center1_mhz. Only active
         links carry traffic; a set-up link can be idle. The set of links can
-        change between associations. Empty for a non-MLO connection. With more than one active link, freq_mhz at the top level
-        is null. On older cores without links, freq_mhz is unreliable for MLO.
+        change between associations. Empty for a non-MLO connection. With more
+        than one active link, freq_mhz at the top level is null. On older cores
+        without links, freq_mhz and signal_dbm are unreliable for MLO: freq_mhz
+        can name an idle link, and signal_dbm often reads 0.
+
+        Errors: 400 means the interface name is invalid; 404 means no such
+        interface in any namespace (check get_network_config_status for the
+        names a profile created); 503 means core could not work out the
+        interface's namespace or read the link (retry shortly).
 
         Args:
             interface: The client interface, e.g. 'wlan0', or a network

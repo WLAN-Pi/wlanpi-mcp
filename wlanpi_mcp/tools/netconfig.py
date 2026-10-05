@@ -32,7 +32,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool(annotations=hints.READ_ONLY)
     async def get_network_config_status() -> dict[str, Any]:
-        """Get the status of all saved network configurations, showing which is active."""
+        """
+        Get the status of all saved network configurations, showing which is active.
+
+        Not an association check: 'channel' is null for a Wi-Fi 7 MLO client
+        even when it is connected. Use get_wlan_link for that.
+        """
         return await client.get("/api/v1/network/config/status")
 
     @mcp.tool(annotations=hints.READ_ONLY)
@@ -119,7 +124,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         Success does NOT mean every entry was applied: tell the user each
         outcomes[] entry's interface, status and detail.
         connected/provisioned: applied (provisioned with detail "does not
-        exist, skipping" means the radio is absent).
+        exist, skipping" means the radio is absent). Applied is not
+        associated: to confirm a Wi-Fi client joined its network (including a
+        Wi-Fi 7 MLO client), call get_wlan_link on that interface.
         in_use: another tool (e.g. profiler, kismet, tcpdump) holds that radio;
         Core left it alone and there is no override. The user must stop that
         tool, then activate again.
