@@ -12,7 +12,6 @@ Claude Desktop only launches stdio servers, so it reaches the daemon through the
       "args": [
         "-y", "mcp-remote",
         "https://<pi-ip-address>:8767/mcp",
-        "--transport", "http-only",
         "--header", "Authorization: Bearer ${WLANPI_TOKEN}"
       ],
       "env": {
