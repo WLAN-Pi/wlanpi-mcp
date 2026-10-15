@@ -131,7 +131,7 @@ Settings load from the environment or `/etc/wlanpi-mcp/config.env`:
 | `ALLOW_POWER_CONTROL` | `true` | Set `false` to disable the `reboot_device`/`shutdown_device` tools |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
-Service management tools (`start_service`, `stop_service`, `restart_service`) are restricted to the allowlist in `wlanpi_mcp/config.py` (`ALLOWED_SERVICES`).
+Service management tools (`start_service`, `stop_service`, `restart_service`) are restricted to wlanpi-core's service allowlist, which `list_allowed_services` reads from `GET /api/v1/system/services`.
 
 ## What's exposed
 
