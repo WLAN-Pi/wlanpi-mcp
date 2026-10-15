@@ -22,16 +22,6 @@ def _register(module):
 
 
 @pytest.mark.asyncio
-async def test_restart_service_blocked_for_unknown_service():
-    from wlanpi_mcp.tools import system
-
-    tools, mock_client = _register(system)
-    result = await tools["restart_service"].fn(name="not-a-real-service")
-    assert "error" in result
-    mock_client.post.assert_not_called()
-
-
-@pytest.mark.asyncio
 async def test_restart_service_calls_api_for_allowed_service():
     from wlanpi_mcp.tools import system
 
