@@ -122,7 +122,6 @@ async def test_leftovers_and_reset_routes(tools):
 
 @respx.mock
 async def test_leftovers_resource(client):
-    netconfig_res._cache.clear()
     respx.get(f"{BASE}/leftovers").mock(
         return_value=httpx.Response(200, json={"left_alone": []})
     )
