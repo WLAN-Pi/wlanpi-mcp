@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     # Gate for the reboot_device/shutdown_device tools. Set false to prevent
     # MCP clients from power-cycling the device.
     ALLOW_POWER_CONTROL: bool = True
-    # Loopback-only: nginx fronts the HTTP daemon on 8767 (TLS) and 8766
-    # (plaintext fallback), so the JWT never crosses the LAN unauthenticated.
+    # Loopback-only: nginx fronts the HTTP daemon with TLS on 8767, so the JWT
+    # never crosses the LAN in cleartext.
     WLANPI_MCP_HOST: str = "127.0.0.1"
-    # 8768: loopback-only upstream for the nginx fronts on 8766/8767.
+    # 8768: loopback-only upstream for the nginx front on 8767.
     # Avoids colliding with the wlanpi-fpms2 state service on 8765.
     WLANPI_MCP_PORT: int = 8768
     LOG_LEVEL: str = "INFO"

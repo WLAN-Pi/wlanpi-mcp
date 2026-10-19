@@ -8,11 +8,9 @@ of its localhost HMAC path.
 
 The MCP endpoint (`/mcp`, streamable HTTP, stateless) is fronted by an MCP-owned
 nginx site: the uvicorn daemon binds loopback-only (127.0.0.1:8768) and nginx
-exposes two listeners. `8767`
-terminates the device's self-signed TLS and is the preferred endpoint; `8766`
-is a plaintext fallback for harnesses that cannot validate the self-signed
-cert (e.g. goose), where the JWT crosses the LAN in cleartext. Use 8767
-whenever the harness can be pointed at the cert.
+exposes it on `8767`, terminating the device's self-signed TLS. That is the
+only MCP endpoint: the plaintext `8766` fallback was removed (#17), so the JWT
+never crosses the LAN in cleartext.
 
 ## Sequence
 
@@ -20,7 +18,7 @@ whenever the harness can be pointed at the cert.
 sequenceDiagram
     participant CD as Claude Desktop
     participant MR as mcp-remote (proxy)
-    participant MG as nginx (:8767 TLS / :8766 plaintext, MCP front)
+    participant MG as nginx (:8767 TLS, MCP front)
     participant MW as MCP: BearerTokenMiddleware
     participant CC as MCP: CoreClient
     participant NG as nginx (:31415)
@@ -75,7 +73,7 @@ flowchart LR
 | Hop | Carries | Auth decision |
 |---|---|---|
 | Claude Desktop → mcp-remote | `Authorization: Bearer <JWT>` | none - just transport |
-| mcp-remote → MCP nginx front (`:8767` TLS) | the same Bearer on every `/mcp` POST | **nginx:** TLS termination with the self-signed cert; the JWT is encrypted in transit. (`:8766` is the plaintext fallback - same Bearer, but cleartext, for harnesses that cannot validate the cert) |
+| mcp-remote → MCP nginx front (`:8767` TLS) | the same Bearer on every `/mcp` POST | **nginx:** TLS termination with the self-signed cert; the JWT is encrypted in transit |
 | MCP nginx front → MCP middleware | same Bearer, forwarded to `127.0.0.1:8768` | **MCP:** reject if no Bearer (401); else stash JWT in contextvar |
 | MCP CoreClient → core nginx | `Bearer <JWT>` + **`X-Wlanpi-Client: mcp`** | none yet - MCP never validates |
 | core nginx → core (unix socket) | rewrites **`X-Real-IP` → `192.0.2.1`** because of the tag | **nginx:** selects which origin core sees |
@@ -131,9 +129,7 @@ the server answered every later tool call with `-32602 Invalid request parameter
 state to lose. Transport
 encryption is a separate control and is provided by the MCP nginx front:
 nginx terminates TLS on 8767 (self-signed cert) in front of the loopback-only
-daemon, so the token never crosses the wire in cleartext on the preferred
-endpoint. The 8766 plaintext fallback (for harnesses that cannot validate the
-cert) sends the token in cleartext - use it only on a trusted network.
+daemon, so the token never crosses the wire in cleartext.
 
 ## Stdio mode
 

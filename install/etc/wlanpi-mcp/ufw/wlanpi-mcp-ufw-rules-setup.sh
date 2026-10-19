@@ -145,6 +145,11 @@ apply_ufw_rules() {
     # linger as a duplicate of the new profile-based rule.
     ufw delete allow 8766/tcp >/dev/null 2>&1 || true
 
+    # An existing `allow wlanpi-mcp` rule keeps the ports the profile had when
+    # it was added, and re-running `ufw allow` skips it as a duplicate. Refresh
+    # it from the new profile so a port dropped there (8766, #17) is closed.
+    ufw app update wlanpi-mcp >/dev/null 2>&1 || true
+
     log_info "Applying UFW rules..."
     if ! ufw allow wlanpi-mcp >/dev/null 2>&1; then
         error "Failed to allow wlanpi-mcp in UFW"

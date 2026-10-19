@@ -92,6 +92,22 @@ def device(tmp_path):
     return Device()
 
 
+def test_only_the_tls_port_is_exposed():
+    # #17: the plaintext 8766 front is gone; nginx and UFW expose TLS 8767 only.
+    profile = configparser.ConfigParser(interpolation=None)
+    profile.read(UFW_SRC / "wlanpi-mcp.rules")
+    assert profile["wlanpi-mcp"]["ports"] == "8767/tcp"
+    conf = (
+        REPO / "install" / "etc" / "wlanpi-mcp" / "nginx" / "wlanpi-mcp.conf"
+    ).read_text()
+    listens = [
+        line.strip().removeprefix("listen ").rstrip(";")
+        for line in conf.splitlines()
+        if line.strip().startswith("listen ")
+    ]
+    assert listens == ["8767 ssl"]
+
+
 def test_unit_ordered_after_core_ufw_first_boot():
     unit = configparser.ConfigParser(interpolation=None, strict=False)
     unit.optionxform = str
@@ -138,6 +154,17 @@ def test_up_to_date_with_rule_present_skips_ufw(device):
     assert result.returncode == 0
     assert "up to date" in result.stdout
     assert device.allow_calls() == []
+
+
+def test_apply_refreshes_existing_rule_from_profile(device):
+    # An upgraded device already has `allow wlanpi-mcp` with the old ports;
+    # `ufw allow` would skip it as a duplicate, so the rule must be refreshed
+    # from the new profile, after the profile is copied in.
+    device.run()
+
+    calls = device.calls.read_text().splitlines()
+    assert "app update wlanpi-mcp" in calls
+    assert calls.index("app update wlanpi-mcp") < calls.index("allow wlanpi-mcp")
 
 
 def test_marker_without_rule_reapplies(device):

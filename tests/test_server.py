@@ -13,10 +13,10 @@ from wlanpi_mcp.server import create_server
 
 # What the daemon sees through the nginx front: the client's real Host and
 # Origin are forwarded verbatim (proxy_set_header Host $http_host), so the
-# loopback-only daemon must accept LAN addresses, hostnames and both ports.
+# loopback-only daemon must accept LAN addresses and hostnames, with or without a port.
 FORWARDED_HEADERS = [
     {"Host": "10.254.102.51:8767", "Origin": "https://10.254.102.51:8767"},
-    {"Host": "10.254.102.51:8766", "Origin": "http://10.254.102.51:8766"},
+    {"Host": "10.254.102.51"},
     {"Host": "wlanpi-9be.local:8767"},
 ]
 
