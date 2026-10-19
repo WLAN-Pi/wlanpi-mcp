@@ -13,10 +13,10 @@ from wlanpi_mcp.server import create_server
 
 # What the daemon sees through the nginx front: the client's real Host and
 # Origin are forwarded verbatim (proxy_set_header Host $http_host), so the
-# loopback-only daemon must accept LAN addresses, hostnames and both ports.
+# loopback-only daemon must accept LAN addresses and hostnames, with or without a port.
 FORWARDED_HEADERS = [
     {"Host": "10.254.102.51:8767", "Origin": "https://10.254.102.51:8767"},
-    {"Host": "10.254.102.51:8766", "Origin": "http://10.254.102.51:8766"},
+    {"Host": "10.254.102.51"},
     {"Host": "wlanpi-9be.local:8767"},
 ]
 
@@ -402,8 +402,8 @@ def test_ticket_download_routes_are_the_only_routes_without_a_jwt(mcp):
         ),
         # Not a scheme: fall back to the one the request arrived on.
         (
-            {"Host": "10.0.0.5:8766", "X-Forwarded-Proto": "javascript"},
-            "http://10.0.0.5:8766/pcap/",
+            {"Host": "127.0.0.1:8768", "X-Forwarded-Proto": "javascript"},
+            "http://127.0.0.1:8768/pcap/",
         ),
         # A Host that is not a plain host[:port] gets no link or curl command.
         ({"Host": "evil'; rm -rf ~; echo '"}, None),

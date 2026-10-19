@@ -30,7 +30,6 @@ EOF
             echo "  Clients authenticate with a wlanpi-core JWT:"
             echo "  POST https://<device>:31415/api/v1/auth/token"
             echo "  Then connect to https://<device>:8767/mcp (TLS)"
-            echo "  or http://<device>:8766/mcp (plaintext fallback)"
             echo "============================================================"
             echo ""
         else
@@ -40,10 +39,9 @@ EOF
             if ! grep -q '^WLANPI_CORE_CA=' "$CONFIG_FILE"; then
                 echo 'WLANPI_CORE_CA=/etc/nginx/ssl/self-signed-wlanpi.cert' >> "$CONFIG_FILE"
             fi
-            # Upgrade: the daemon is fronted by nginx (TLS on 8767,
-            # plaintext fallback on 8766). It must bind loopback-only, or its
-            # port collides with nginx's listeners (EADDRINUSE) and the service
-            # fails to start. Chain the migrations so a device on any prior
+            # Upgrade: the daemon is fronted by nginx (TLS on 8767). It must
+            # bind loopback-only, or its port collides with nginx's listeners
+            # (EADDRINUSE) and the service fails to start. Chain the migrations so a device on any prior
             # version lands on the current loopback upstream port 8768.
             sed -i 's|^WLANPI_MCP_HOST=0.0.0.0$|WLANPI_MCP_HOST=127.0.0.1|' "$CONFIG_FILE"
             sed -i 's|^WLANPI_MCP_PORT=8766$|WLANPI_MCP_PORT=8768|' "$CONFIG_FILE"
@@ -53,9 +51,9 @@ EOF
         chmod 640 "$CONFIG_FILE"
         chown root:wlanpi "$CONFIG_FILE" 2>/dev/null || true
 
-        # Open the MCP ports in UFW via the shipped application profile
+        # Open the MCP port in UFW via the shipped application profile
         # (/etc/ufw/applications.d/wlanpi-mcp). The setup script installs the
-        # profile and runs `ufw allow wlanpi-mcp`; 8766/8767 are defined in
+        # profile and runs `ufw allow wlanpi-mcp`; 8767 is defined in
         # /etc/wlanpi-mcp/ufw/wlanpi-mcp.rules, adjust there if the ports change.
         # In a chroot (image build) ufw isn't active; the first-boot oneshot
         # (enabled by dh_installsystemd, see debian/rules) applies the rules on

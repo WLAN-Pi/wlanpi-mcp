@@ -1,3 +1,16 @@
+wlanpi-mcp (0.6.17-6) unstable; urgency=medium
+
+  * Remove the plaintext MCP listener on 8766. nginx now fronts the daemon
+    only with TLS on 8767 (https://<wlanpi>:8767/mcp), so the wlanpi-core
+    JWT never crosses the LAN in cleartext. The UFW profile drops 8766/tcp
+    (rules version 4) and the setup script runs `ufw app update wlanpi-mcp`
+    so an upgraded device's existing rule is refreshed and 8766 is closed.
+    Clients still pointed at http://<wlanpi>:8766/mcp time out (connection
+    refused on-box) and must move to 8767, trusting
+    self-signed-wlanpi.cert. (#17)
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Mon, 19 Oct 2026 12:00:00 +0000
+
 wlanpi-mcp (0.6.17-5) unstable; urgency=medium
 
   * get_profiler_reports now reads the profiler's results through
