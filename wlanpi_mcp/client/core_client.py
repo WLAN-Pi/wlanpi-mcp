@@ -108,6 +108,17 @@ class CoreClient:
         """Send a GET request to the given wlanpi-core path."""
         return await self._request("GET", path, **kwargs)
 
+    async def get_bytes(self, path: str, **kwargs: Any) -> tuple[bytes, str]:
+        """
+        GET a wlanpi-core path that returns a file rather than JSON.
+
+        Returns (body, content type). Errors raise CoreAPIError like get().
+        """
+        response = await self._send("GET", path, **kwargs)
+        return response.content, response.headers.get(
+            "content-type", "application/octet-stream"
+        )
+
     async def post(self, path: str, **kwargs: Any) -> Any:
         """Send a POST request to the given wlanpi-core path."""
         return await self._request("POST", path, **kwargs)
@@ -141,6 +152,9 @@ class CoreClient:
         return token
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        return (await self._send(method, path, **kwargs)).json()
+
+    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         headers = {
             **kwargs.get("headers", {}),
             "Authorization": f"Bearer {self._current_token()}",
@@ -151,4 +165,4 @@ class CoreClient:
         )
         if not response.is_success:
             raise CoreAPIError(response)
-        return response.json()
+        return response

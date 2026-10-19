@@ -1,3 +1,15 @@
+wlanpi-mcp (0.6.17-5) unstable; urgency=medium
+
+  * get_profiler_reports now reads the profiler's results through
+    wlanpi-core's GET /api/v1/profiler/files and /files/{path}
+    (WLAN-Pi/wlanpi-core#378) instead of /var/www/html/profiler, so it no
+    longer reads local files. Its arguments and result shape are unchanged.
+    The separate JWT pre-check is gone: core validates the token on every
+    call, and a refused token is now a tool error carrying core's detail.
+    PROFILER_DATA_DIR is removed. Depends on wlanpi-core (>= 2.4.8). (#58)
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Mon, 19 Oct 2026 10:00:11 +0000
+
 wlanpi-mcp (0.6.17-4) unstable; urgency=medium
 
   * New read-only tool get_wlan_link wraps wlanpi-core's

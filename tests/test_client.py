@@ -98,3 +98,29 @@ async def test_plain_text_error_body_is_kept(client):
     with pytest.raises(CoreAPIError) as exc_info:
         await client.post("/api/v1/network/wlan/revert")
     assert exc_info.value.detail == "Internal Server Error"
+
+
+@respx.mock
+async def test_get_bytes_returns_the_body_and_content_type(client, bearer_token):
+    route = respx.get("https://localhost:31415/api/v1/profiler/files/x.pcap").mock(
+        return_value=httpx.Response(
+            200,
+            content=b"\xd4\xc3\xb2\xa1",
+            headers={"content-type": "application/vnd.tcpdump.pcap"},
+        )
+    )
+    data, media = await client.get_bytes("/api/v1/profiler/files/x.pcap")
+    assert data == b"\xd4\xc3\xb2\xa1"
+    assert media == "application/vnd.tcpdump.pcap"
+    assert route.calls[0].request.headers["Authorization"] == f"Bearer {bearer_token}"
+
+
+@respx.mock
+async def test_get_bytes_raises_core_api_error(client):
+    respx.get("https://localhost:31415/api/v1/profiler/files/gone").mock(
+        return_value=httpx.Response(404, text="Profiler file not found")
+    )
+    with pytest.raises(CoreAPIError) as exc:
+        await client.get_bytes("/api/v1/profiler/files/gone")
+    assert exc.value.status_code == 404
+    assert exc.value.detail == "Profiler file not found"
