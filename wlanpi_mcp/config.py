@@ -2,34 +2,6 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ALLOWED_SERVICES = [
-    "wlanpi-profiler",
-    "wlanpi-fpms",
-    "wlanpi-chat-bot",
-    "bt-agent",
-    "bt-network",
-    "iperf",
-    "iperf3",
-    "tftpd-hpa",
-    "hostapd",
-    "wpa_supplicant",
-    "wpa_supplicant@wlan0",
-    "kismet",
-    "grafana-server",
-    "cockpit",
-    "wlanpi-grafana-scanner-wlan0",
-    "wlanpi-grafana-scanner-wlan1",
-    "wlanpi-grafana-scanner-wlan2",
-    "wlanpi-grafana-health",
-    "wlanpi-grafana-internet",
-    "wlanpi-grafana-wispy-24",
-    "wlanpi-grafana-wispy-5",
-    "wlanpi-grafana-wipry-lp-24",
-    "wlanpi-grafana-wipry-lp-5",
-    "wlanpi-grafana-wipry-lp-6",
-    "wlanpi-grafana-wipry-lp-stop",
-]
-
 
 class Settings(BaseSettings):
     """Pydantic settings for the WLAN Pi MCP server."""

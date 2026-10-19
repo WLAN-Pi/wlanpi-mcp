@@ -1,8 +1,18 @@
 import httpx
 import pytest
 import respx
+from mcp.server.fastmcp.exceptions import ToolError
 
-from wlanpi_mcp.config import ALLOWED_SERVICES
+from wlanpi_mcp._compat import FastMCP
+from wlanpi_mcp.tools import system
+
+CORE = "https://localhost:31415/api/v1/system"
+
+
+def _tools(client):
+    mcp = FastMCP("test")
+    system.register(mcp, client)
+    return mcp._tool_manager._tools
 
 
 @respx.mock
@@ -32,21 +42,40 @@ async def test_get_service_status(client):
 
 
 @respx.mock
-@pytest.mark.asyncio
-async def test_start_service_blocked_for_unknown_service(client):
-    from wlanpi_mcp._compat import FastMCP
-    from wlanpi_mcp.tools import system
+async def test_list_allowed_services_reads_core_allowlist(client):
+    services = ["wlanpi-profiler", "iperf2", "iperf2-udp", "iperf3"]
+    route = respx.get(f"{CORE}/services").mock(
+        return_value=httpx.Response(200, json={"services": services})
+    )
 
-    mcp = FastMCP("test")
-    system.register(mcp, client)
+    result = await _tools(client)["list_allowed_services"].run({})
 
-    # The tool function is registered but we test the guard directly
-    # by calling the inner function via the client guard in system.py
-    # For direct unit testing, verify ALLOWED_SERVICES check
-    assert "not-a-real-service" not in ALLOWED_SERVICES
+    assert route.called
+    assert result == {"services": services}
 
 
-def test_allowed_services_list_is_not_empty():
-    assert len(ALLOWED_SERVICES) > 0
-    assert "wlanpi-profiler" in ALLOWED_SERVICES
-    assert "kismet" in ALLOWED_SERVICES
+@respx.mock
+@pytest.mark.parametrize("action", ["start", "stop", "restart"])
+async def test_service_actions_defer_to_core_allowlist(client, action):
+    # No local copy of the allowlist: iperf2 used to be refused here
+    # before reaching core, which allows it (#64).
+    route = respx.post(f"{CORE}/service/{action}").mock(
+        return_value=httpx.Response(200, json={"name": "iperf2", "active": True})
+    )
+
+    result = await _tools(client)[f"{action}_service"].run({"name": "iperf2"})
+
+    assert route.calls.last.request.url.params["name"] == "iperf2"
+    assert result["name"] == "iperf2"
+
+
+@respx.mock
+async def test_start_service_surfaces_core_refusal(client):
+    respx.post(f"{CORE}/service/start").mock(
+        return_value=httpx.Response(
+            400, text="starting iperf access is restricted or does not exist"
+        )
+    )
+
+    with pytest.raises(ToolError, match="restricted or does not exist"):
+        await _tools(client)["start_service"].run({"name": "iperf"})

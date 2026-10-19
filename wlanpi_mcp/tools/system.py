@@ -4,7 +4,7 @@ from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
-from wlanpi_mcp.config import ALLOWED_SERVICES, get_settings
+from wlanpi_mcp.config import get_settings
 from wlanpi_mcp.tools import hints
 
 
@@ -23,8 +23,15 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
 
     @mcp.tool(annotations=hints.READ_ONLY)
     async def list_allowed_services() -> dict[str, Any]:
-        """List all services that can be managed on this WLAN Pi (started, stopped, or queried)."""
-        return {"services": ALLOWED_SERVICES}
+        """
+        List the services this WLAN Pi lets you query, start, stop, or restart.
+
+        The list is wlanpi-core's own allowlist, the same one it checks on every
+        service call, so only these names work with get_service_status,
+        start_service, stop_service and restart_service. A listed service may
+        still not be installed on this image; get_service_status says so.
+        """
+        return await client.get("/api/v1/system/services")
 
     @mcp.tool(annotations=hints.READ_ONLY)
     async def get_service_status(name: str) -> dict[str, Any]:
@@ -32,7 +39,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         Get the running status of a WLAN Pi service.
 
         Args:
-            name: Service name (use list_allowed_services to see valid names)
+            name: Service name (use list_allowed_services to see valid names).
+                wlanpi-core answers 400 for a name outside its allowlist
+                or a service that is not installed.
         """
         return await client.get("/api/v1/system/service/status", params={"name": name})
 
@@ -42,10 +51,10 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         Start a WLAN Pi service.
 
         Args:
-            name: Service name (use list_allowed_services to see valid names)
+            name: Service name (use list_allowed_services to see valid names).
+                wlanpi-core answers 400 for a name outside its allowlist
+                or a service that is not installed.
         """
-        if name.replace(".service", "") not in ALLOWED_SERVICES:
-            return {"error": f"'{name}' is not in the allowed services list"}
         return await client.post("/api/v1/system/service/start", params={"name": name})
 
     @mcp.tool(annotations=hints.DESTRUCTIVE)
@@ -54,10 +63,10 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         Stop a WLAN Pi service.
 
         Args:
-            name: Service name (use list_allowed_services to see valid names)
+            name: Service name (use list_allowed_services to see valid names).
+                wlanpi-core answers 400 for a name outside its allowlist
+                or a service that is not installed.
         """
-        if name.replace(".service", "") not in ALLOWED_SERVICES:
-            return {"error": f"'{name}' is not in the allowed services list"}
         return await client.post("/api/v1/system/service/stop", params={"name": name})
 
     @mcp.tool(annotations=hints.DESTRUCTIVE)
@@ -66,10 +75,10 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         Restart a WLAN Pi service.
 
         Args:
-            name: Service name (use list_allowed_services to see valid names)
+            name: Service name (use list_allowed_services to see valid names).
+                wlanpi-core answers 400 for a name outside its allowlist
+                or a service that is not installed.
         """
-        if name.replace(".service", "") not in ALLOWED_SERVICES:
-            return {"error": f"'{name}' is not in the allowed services list"}
         return await client.post(
             "/api/v1/system/service/restart", params={"name": name}
         )
