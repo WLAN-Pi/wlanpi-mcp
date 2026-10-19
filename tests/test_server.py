@@ -402,8 +402,8 @@ def test_ticket_download_routes_are_the_only_routes_without_a_jwt(mcp):
         ),
         # Not a scheme: fall back to the one the request arrived on.
         (
-            {"Host": "10.0.0.5:8766", "X-Forwarded-Proto": "javascript"},
-            "http://10.0.0.5:8766/pcap/",
+            {"Host": "127.0.0.1:8768", "X-Forwarded-Proto": "javascript"},
+            "http://127.0.0.1:8768/pcap/",
         ),
         # A Host that is not a plain host[:port] gets no link or curl command.
         ({"Host": "evil'; rm -rf ~; echo '"}, None),

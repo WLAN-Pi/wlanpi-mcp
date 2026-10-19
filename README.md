@@ -111,7 +111,7 @@ Notes:
 
 - The TLS endpoint (8767) uses the same self-signed certificate as wlanpi-core, so your client must trust it (`/etc/nginx/ssl/self-signed-wlanpi.cert` on the device), or accept the cert warning. The JWT is encrypted in transit.
 - The daemon relies on the Bearer JWT gate, not on the MCP SDK's Host/Origin (DNS rebinding) check, which is disabled because nginx forwards the client's real Host header to the loopback-only daemon. A `421 Misdirected Request` on `/mcp` means that check is on again.
-- There is no plaintext endpoint: 8767 is the only one, so a harness that cannot be pointed at a CA file (e.g. goose) needs `self-signed-wlanpi.cert` added to the OS trust store it uses. The plaintext `http://<wlanpi>:8766/mcp` fallback was removed (#17); clients still configured for it get connection refused.
+- There is no plaintext endpoint: 8767 is the only one, so a harness that cannot be pointed at a CA file (e.g. goose) needs `self-signed-wlanpi.cert` added to the OS trust store it uses. The plaintext `http://<wlanpi>:8766/mcp` fallback was removed (#17): nothing listens on 8766 and UFW no longer opens it, so a client still configured for it times out (or gets connection refused on-box). Point it at `https://<wlanpi>:8767/mcp` instead.
 - `--transport http-only` skips mcp-remote's SSE fallback; this server speaks streamable HTTP only.
 - The token is passed via the `env` block and interpolated into the header (`${WLANPI_TOKEN}`) - this sidesteps a known mcp-remote issue with spaces in `args` values on some platforms.
 
