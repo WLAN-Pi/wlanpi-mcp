@@ -3,7 +3,7 @@
 from typing import Any
 
 from wlanpi_mcp._compat import FastMCP
-from wlanpi_mcp.client.core_client import CoreClient
+from wlanpi_mcp.client.core_client import CoreAPIError, CoreClient
 from wlanpi_mcp.tools import hints
 
 
@@ -11,7 +11,9 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
     """Register the utility tools."""
 
     @mcp.tool(annotations=hints.READ_ONLY)
-    async def get_reachability(targets: list[str] | None = None) -> dict[str, Any]:
+    async def get_reachability(
+        targets: list[str] | None = None, namespace: str | None = None
+    ) -> dict[str, Any]:
         """
         Test WLAN Pi network reachability.
 
@@ -21,9 +23,38 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         Args:
             targets: Optional extra hostnames or IPs to ping as well
                 (e.g. ['8.8.8.8', 'intranet.example.com'])
+            namespace: Optional network namespace to test from (default: root
+                namespace, usually Ethernet). The gateway lookup, DNS (using
+                /etc/netns/<namespace>/resolv.conf if present) and every check
+                run inside that namespace, so this tests whatever link that
+                namespace holds (typically a profile's Wi-Fi client). Any
+                existing namespace is accepted, e.g. names from
+                get_network_config_status / get_network_config. Omit or pass
+                "root" for the root namespace.
+
+        Returns:
+            The reachability results. A 400 from wlanpi-core (invalid name or
+            'unknown namespace: <ns>') is raised as a tool error. A 503 'No
+            default gateway found' is returned as an error dict: the namespace
+            has no default route, which is a finding about that link.
         """
-        params = {"targets": targets} if targets else None
-        return await client.get("/api/v1/utils/reachability", params=params)
+        params: dict[str, Any] = {}
+        if targets:
+            params["targets"] = targets
+        if namespace:
+            params["namespace"] = namespace
+        try:
+            return await client.get("/api/v1/utils/reachability", params=params or None)
+        except CoreAPIError as exc:
+            detail = exc.detail
+            message = detail.get("error") if isinstance(detail, dict) else detail
+            if not isinstance(message, str):
+                message = str(exc)
+            if exc.status_code != 503 or not message.lower().startswith(
+                "no default gateway"
+            ):
+                raise
+            return {"error": message, "namespace": namespace or "root"}
 
     @mcp.tool(annotations=hints.READ_ONLY)
     async def get_usb_interfaces() -> dict[str, Any]:

@@ -217,8 +217,87 @@ async def test_get_reachability_forwards_targets():
         "targets": ["8.8.8.8", "1.1.1.1"]
     }
 
+    await tool.run({"namespace": "ns_a"})
+    assert mock_client.get.call_args.kwargs["params"] == {"namespace": "ns_a"}
+
+    await tool.run({"targets": ["8.8.8.8"], "namespace": "ns_a"})
+    assert mock_client.get.call_args.kwargs["params"] == {
+        "targets": ["8.8.8.8"],
+        "namespace": "ns_a",
+    }
+
     await tool.run({})
     assert mock_client.get.call_args.kwargs["params"] is None
+
+
+REACHABILITY = "https://localhost:31415/api/v1/utils/reachability"
+
+
+@pytest.fixture
+def reachability_tool(client):
+    from wlanpi_mcp._compat import FastMCP
+    from wlanpi_mcp.tools.utils import register
+
+    mcp = FastMCP("test")
+    register(mcp, client)
+    return mcp._tool_manager._tools["get_reachability"]
+
+
+@respx.mock
+async def test_get_reachability_unknown_namespace_raises(reachability_tool):
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    from wlanpi_mcp.client.core_client import CoreAPIError
+
+    route = respx.get(REACHABILITY).mock(
+        return_value=httpx.Response(400, json={"error": "unknown namespace: ns_x"})
+    )
+    with pytest.raises(ToolError) as exc:
+        await reachability_tool.run({"namespace": "ns_x"})
+    cause = exc.value.__cause__
+    assert isinstance(cause, CoreAPIError)
+    assert cause.status_code == 400
+    assert "unknown namespace: ns_x" in str(exc.value)
+    assert "namespace=ns_x" in str(route.calls.last.request.url)
+
+
+@respx.mock
+async def test_get_reachability_no_gateway_is_returned(reachability_tool):
+    respx.get(REACHABILITY).mock(
+        return_value=httpx.Response(503, json={"error": "No default gateway found"})
+    )
+    result = await reachability_tool.run({"namespace": "ns_a"})
+    assert result == {"error": "No default gateway found", "namespace": "ns_a"}
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("args", "expected_ns"), [({}, "root"), ({"namespace": "ns_a"}, "ns_a")]
+)
+async def test_get_reachability_plain_text_no_gateway(
+    reachability_tool, args, expected_ns
+):
+    respx.get(REACHABILITY).mock(
+        return_value=httpx.Response(503, text="No default gateway")
+    )
+    result = await reachability_tool.run(args)
+    assert result == {"error": "No default gateway", "namespace": expected_ns}
+
+
+@respx.mock
+async def test_get_reachability_other_503_raises(reachability_tool):
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    from wlanpi_mcp.client.core_client import CoreAPIError
+
+    respx.get(REACHABILITY).mock(
+        return_value=httpx.Response(503, json={"error": "Reachability check failed"})
+    )
+    with pytest.raises(ToolError) as exc:
+        await reachability_tool.run({})
+    cause = exc.value.__cause__
+    assert isinstance(cause, CoreAPIError)
+    assert cause.status_code == 503
 
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
