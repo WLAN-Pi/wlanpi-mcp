@@ -1,27 +1,23 @@
 """
 get_profiler_reports: the per-client results wlanpi-profiler writes.
 
-SHORT-TERM EXCEPTION to the "everything through wlanpi-core" rule (see
-CLAUDE.md). wlanpi-core can start, stop and purge the profiler but has no
-endpoint that reads its results, so this module reads them straight from
-Settings.PROFILER_DATA_DIR (/var/www/html/profiler):
+Read through wlanpi-core (2.4.8+), which serves the profiler's data directory:
+
+    GET /api/v1/profiler/files          manifest of clients and reports
+    GET /api/v1/profiler/files/{path}   one file's bytes
 
     clients/<mac>/<mac>_<band>.json   capability profile (schema v2)
     clients/<mac>/<mac>_<band>.txt    human-readable report
     clients/<mac>/<mac>_<band>.pcap   the association request frame
     reports/profiler-<date>.csv       one row per profiled client, per day
 
-The relaxation is scoped tightly: read-only, only regular files under
-clients/<mac>/ and reports/ (symlinks are skipped, paths are realpath-checked
-against the data directory), and every call still has its JWT accepted by
-wlanpi-core before anything is returned. Moving onto core endpoints is
-tracked in WLAN-Pi/wlanpi-mcp#58, which waits on WLAN-Pi/wlanpi-core#378;
-keep the tool's arguments and result shape stable for that migration.
+Core confines reads to clients/ and reports/ and refuses symlinks, and every
+call carries the caller's JWT, so core validates it like any other tool.
 
 Files can come back three ways: parsed JSON profiles inline, one single-use
 link per file, or one single-use link to a zip of them all. The links reuse
 the get_pcap_download_url pattern (download_links.py) but hold a snapshot of
-the bytes in memory, so a ticket never names a path on disk.
+the bytes in memory, so a ticket never names a path.
 """
 
 import asyncio
@@ -29,7 +25,7 @@ import hashlib
 import io
 import json
 import logging
-import os
+import posixpath
 import re
 import secrets
 import shlex
@@ -38,14 +34,14 @@ import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
+from urllib.parse import quote
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from wlanpi_mcp import download_links
 from wlanpi_mcp._compat import FastMCP
-from wlanpi_mcp.client.core_client import CoreClient
-from wlanpi_mcp.config import get_settings
+from wlanpi_mcp.client.core_client import CoreAPIError, CoreClient
 from wlanpi_mcp.tools import hints
 
 log = logging.getLogger(__name__)
@@ -59,16 +55,14 @@ REPORT_PREFIX = "/profiler-report/"
 #: are a few KB each, so this is thousands of clients; past it, filter.
 MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024
 
+#: Core's profiler file endpoints, added in wlanpi-core 2.4.8.
+FILES_PATH = "/api/v1/profiler/files"
+
+#: Most file downloads from core in flight at once.
+_FETCH_CONCURRENCY = 8
+
 #: The profiler names a client directory after its MAC, lowercase with dashes.
 _MAC_RE = re.compile(r"^[0-9a-f]{2}(?:-[0-9a-f]{2}){5}$")
-
-_MEDIA_TYPES = {
-    ".json": "application/json",
-    ".txt": "text/plain; charset=utf-8",
-    ".pcap": "application/vnd.tcpdump.pcap",
-    ".csv": "text/csv; charset=utf-8",
-}
-_OCTET = "application/octet-stream"
 
 
 @dataclass(frozen=True)
@@ -112,88 +106,72 @@ def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, UTC).isoformat(timespec="seconds")
 
 
-def _regular_files(directory: str, root: str) -> list[os.DirEntry[str]]:
-    """List the regular, non-symlink files in a directory inside root."""
-    try:
-        entries = list(os.scandir(directory))
-    except OSError:
-        return []
-    files = []
-    for entry in entries:
-        try:
-            if not entry.is_file(follow_symlinks=False):
-                continue
-        except OSError:
-            continue
-        resolved = os.path.realpath(entry.path)
-        if resolved.startswith(root + os.sep):
-            files.append(entry)
-    return sorted(files, key=lambda e: e.name)
-
-
-def _file_info(entry: os.DirEntry[str], root: str) -> dict[str, Any] | None:
-    try:
-        st = entry.stat(follow_symlinks=False)
-    except OSError:
-        return None
+def _file_info(entry: dict[str, Any]) -> dict[str, Any]:
+    """Turn one of core's manifest files into this tool's file record."""
+    mtime = datetime.fromisoformat(entry["modified"]).timestamp()
     return {
-        "name": entry.name,
-        "path": os.path.relpath(entry.path, root),
-        "size_bytes": st.st_size,
-        "modified": _iso(st.st_mtime),
-        "_abs": entry.path,
-        "_mtime": st.st_mtime,
+        "name": posixpath.basename(entry["path"]),
+        "path": entry["path"],
+        "size_bytes": entry["size"],
+        "modified": _iso(mtime),
+        "_mtime": mtime,
     }
 
 
-def _scan(
-    root: str, mac: str | None
+def _from_manifest(
+    manifest: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Return (clients newest first, session reports newest first).
 
-    Each client is {"mac", "modified", "files": [...]}; each file carries
-    private _abs/_mtime keys that are stripped before anything is returned.
+    Each client is {"mac", "modified", "files": [...]}; private _mtime keys
+    are stripped before anything is returned.
     """
     clients = []
-    clients_dir = os.path.join(root, "clients")
-    try:
-        dirs = list(os.scandir(clients_dir))
-    except OSError:
-        dirs = []
-    for entry in dirs:
-        if not _MAC_RE.match(entry.name) or (mac and entry.name != mac):
-            continue
-        try:
-            if not entry.is_dir(follow_symlinks=False):
-                continue
-        except OSError:
-            continue
-        files = [
-            info
-            for f in _regular_files(entry.path, root)
-            if (info := _file_info(f, root)) is not None
-        ]
-        if not files:
+    for entry in manifest.get("clients", []):
+        # Core reports the MAC with colons; callers know it by the profiler's
+        # directory name.
+        mac = entry["mac"].lower().replace(":", "-")
+        files = [_file_info(f) for f in entry.get("files", [])]
+        if not _MAC_RE.match(mac) or not files:
             continue
         newest = max(f["_mtime"] for f in files)
         clients.append(
-            {
-                "mac": entry.name,
-                "modified": _iso(newest),
-                "_mtime": newest,
-                "files": files,
-            }
+            {"mac": mac, "modified": _iso(newest), "_mtime": newest, "files": files}
         )
     clients.sort(key=lambda c: c["_mtime"], reverse=True)
 
     reports = [
-        info
-        for f in _regular_files(os.path.join(root, "reports"), root)
-        if f.name.endswith(".csv") and (info := _file_info(f, root)) is not None
+        _file_info(f) for f in manifest.get("reports", []) if f["path"].endswith(".csv")
     ]
     reports.sort(key=lambda r: r["_mtime"], reverse=True)
     return clients, reports
+
+
+async def _fetch_all(
+    client: CoreClient, files: list[dict[str, Any]]
+) -> list[tuple[dict[str, Any], bytes | CoreAPIError, str]]:
+    """
+    Download each file from core, in order, a few at a time.
+
+    A 404 (the file was purged or rewritten since the manifest) comes back in
+    place of its bytes; any other core error propagates.
+    """
+    gate = asyncio.Semaphore(_FETCH_CONCURRENCY)
+
+    async def fetch(
+        f: dict[str, Any],
+    ) -> tuple[dict[str, Any], bytes | CoreAPIError, str]:
+        async with gate:
+            try:
+                data, media = await client.get_bytes(f"{FILES_PATH}/{quote(f['path'])}")
+            except CoreAPIError as exc:
+                if exc.status_code != 404:
+                    raise
+                return f, exc, ""
+            return f, data, media
+
+    return list(await asyncio.gather(*(fetch(f) for f in files)))
 
 
 def _public(info: dict[str, Any]) -> dict[str, Any]:
@@ -203,54 +181,49 @@ def _public(info: dict[str, Any]) -> dict[str, Any]:
 
 def _band(name: str, mac: str) -> str | None:
     """'aa-..-ff_5GHz.json' -> '5GHz'; None when the profiler wrote no band."""
-    stem = os.path.splitext(name)[0]
+    stem = posixpath.splitext(name)[0]
     return stem.removeprefix(mac).removeprefix("_") or None
 
 
-def _load_profiles(client: dict[str, Any], include_frame: bool) -> dict[str, Any]:
+def _parse_profiles(
+    client: dict[str, Any],
+    fetched: dict[str, bytes | CoreAPIError],
+    include_frame: bool,
+) -> dict[str, Any]:
     """Parse one client's JSON profiles (one per band it was seen on)."""
     profiles = []
     for f in client["files"]:
         if not f["name"].endswith(".json"):
             continue
+        data = fetched[f["path"]]
+        if isinstance(data, CoreAPIError):
+            profiles.append({"file": f["path"], "error": f"unreadable: {data}"})
+            continue
         try:
-            with open(f["_abs"], encoding="utf-8") as fh:
-                data = json.load(fh)
-        except (OSError, ValueError) as exc:
+            profile = json.loads(data)
+        except ValueError as exc:
             profiles.append({"file": f["path"], "error": f"unreadable: {exc}"})
             continue
-        if not isinstance(data, dict):
+        if not isinstance(profile, dict):
             profiles.append({"file": f["path"], "error": "not a JSON object"})
             continue
         if not include_frame:
-            data.pop("pcapng", None)
+            profile.pop("pcapng", None)
         profiles.append(
             {
                 "file": f["path"],
                 "band": _band(f["name"], client["mac"]),
                 "modified": f["modified"],
-                **data,
+                **profile,
             }
         )
     return {"mac": client["mac"], "modified": client["modified"], "profiles": profiles}
 
 
-def _read_all(files: list[dict[str, Any]]) -> list[tuple[dict[str, Any], bytes]]:
-    """Read each file's bytes, skipping any that vanish mid-call."""
-    out = []
-    for f in files:
-        try:
-            with open(f["_abs"], "rb") as fh:
-                out.append((f, fh.read()))
-        except OSError as exc:
-            log.warning("profiler report %s unreadable: %s", f["path"], exc)
-    return out
-
-
-def _zip(blobs: list[tuple[dict[str, Any], bytes]]) -> bytes:
+def _zip(blobs: list[tuple[dict[str, Any], bytes, str]]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f, data in blobs:
+        for f, data, _ in blobs:
             # Keep each file's own mtime (when the client was profiled), not
             # the time the zip was built. Zip times are local, 2 s, >= 1980.
             stamp = time.localtime(max(f["_mtime"], 315532800))[:6]
@@ -329,6 +302,10 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         "truncated", "session_reports": [...]}, plus the link fields for
         'links'/'zip'. No clients means the profiler has not profiled
         anything since the data was last purged.
+
+        Reads through wlanpi-core's profiler file endpoints (wlanpi-core
+        2.4.8 or later). A 401 from core means it refused this token: get a
+        fresh one and reconnect.
         """
         if output not in ("json", "links", "zip"):
             return {"error": "output must be 'json', 'links' or 'zip'"}
@@ -338,13 +315,21 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             if wanted is None:
                 return {"error": f"not a MAC address: {mac!r}"}
 
-        # The files are read locally, so nothing else would check the token:
-        # wlanpi-core must accept it before any profile is returned.
-        if (token_error := await download_links.check_token(client)) is not None:
-            return {"error": token_error}
-
-        root = os.path.realpath(get_settings().PROFILER_DATA_DIR)
-        clients, reports = await asyncio.to_thread(_scan, root, wanted)
+        try:
+            manifest = await client.get(
+                FILES_PATH, params={"mac": wanted} if wanted else None
+            )
+        except CoreAPIError as exc:
+            # The listing route has no 404 of its own: core predates it.
+            if exc.status_code == 404:
+                return {
+                    "error": (
+                        "this wlanpi-core has no profiler files endpoint "
+                        f"({FILES_PATH}); upgrade wlanpi-core to 2.4.8 or later"
+                    )
+                }
+            raise
+        clients, reports = _from_manifest(manifest)
         total = len(clients)
         if max_clients > 0:
             clients = clients[:max_clients]
@@ -362,9 +347,14 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
             )
 
         if output == "json":
+            wanted_files = [
+                f for c in clients for f in c["files"] if f["name"].endswith(".json")
+            ]
+            fetched = {
+                f["path"]: data for f, data, _ in await _fetch_all(client, wanted_files)
+            }
             result["clients"] = [
-                await asyncio.to_thread(_load_profiles, c, include_frame)
-                for c in clients
+                _parse_profiles(c, fetched, include_frame) for c in clients
             ]
             result["session_reports"] = [_public(r) for r in reports]
             return result
@@ -381,7 +371,12 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                     "it with mac or max_clients, or include_session_csv=false."
                 )
             }
-        blobs = await asyncio.to_thread(_read_all, files)
+        blobs = []
+        for f, data, media in await _fetch_all(client, files):
+            if isinstance(data, CoreAPIError):
+                log.warning("profiler report %s gone: %s", f["path"], data)
+            else:
+                blobs.append((f, data, media))
 
         now = time.time()
         _prune_tickets(now)
@@ -407,7 +402,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
                     "filename": filename,
                     "size_bytes": len(data),
                     "sha256": hashlib.sha256(data).hexdigest(),
-                    "files": [f["path"] for f, _ in blobs],
+                    "files": [f["path"] for f, _, _ in blobs],
                     **link(route),
                 }
             )
@@ -416,8 +411,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         else:
             entries = []
             pairs = []
-            for f, data in blobs:
-                media = _MEDIA_TYPES.get(os.path.splitext(f["name"])[1], _OCTET)
+            for f, data, media in blobs:
                 route = _mint(data, f["name"], media, now)
                 entries.append(
                     {"path": f["path"], "size_bytes": len(data), **link(route)}

@@ -13,10 +13,10 @@ from wlanpi_mcp.server import create_server
 
 # What the daemon sees through the nginx front: the client's real Host and
 # Origin are forwarded verbatim (proxy_set_header Host $http_host), so the
-# loopback-only daemon must accept LAN addresses, hostnames and both ports.
+# loopback-only daemon must accept LAN addresses and hostnames, with or without a port.
 FORWARDED_HEADERS = [
     {"Host": "10.254.102.51:8767", "Origin": "https://10.254.102.51:8767"},
-    {"Host": "10.254.102.51:8766", "Origin": "http://10.254.102.51:8766"},
+    {"Host": "10.254.102.51"},
     {"Host": "wlanpi-9be.local:8767"},
 ]
 
@@ -294,18 +294,39 @@ async def test_profiler_report_links_serve_each_file_once_without_a_jwt(
 ):
     # get_profiler_reports(output="links") mints a ticket per file through an
     # authenticated /mcp call; plain curl then fetches each one once.
-    from wlanpi_mcp.config import Settings
     from wlanpi_mcp.tools import profiler_reports
 
-    settings = Settings(PROFILER_DATA_DIR=str(tmp_path), _env_file=None)
-    monkeypatch.setattr(profiler_reports, "get_settings", lambda: settings)
     profiler_reports._TICKETS.clear()
-    client_dir = tmp_path / "clients" / "aa-bb-cc-dd-ee-ff"
-    client_dir.mkdir(parents=True)
-    (client_dir / "aa-bb-cc-dd-ee-ff_5GHz.json").write_text('{"mac": "x"}')
-    (client_dir / "aa-bb-cc-dd-ee-ff_5GHz.pcap").write_bytes(b"\xd4\xc3\xb2\xa1")
-    (tmp_path / "reports").mkdir()
-    respx.get(DEVICE_INFO_URL).mock(return_value=httpx.Response(200, json={}))
+    files_url = "https://localhost:31415/api/v1/profiler/files"
+    stem = "clients/aa-bb-cc-dd-ee-ff/aa-bb-cc-dd-ee-ff_5GHz"
+    modified = "2026-10-04T12:00:00Z"
+    respx.get(files_url).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "clients": [
+                    {
+                        "mac": "aa:bb:cc:dd:ee:ff",
+                        "files": [
+                            {"path": f"{stem}.json", "size": 12, "modified": modified},
+                            {"path": f"{stem}.pcap", "size": 4, "modified": modified},
+                        ],
+                    }
+                ],
+                "reports": [],
+            },
+        )
+    )
+    respx.get(f"{files_url}/{stem}.json").mock(
+        return_value=httpx.Response(200, json={"mac": "x"})
+    )
+    respx.get(f"{files_url}/{stem}.pcap").mock(
+        return_value=httpx.Response(
+            200,
+            content=b"\xd4\xc3\xb2\xa1",
+            headers={"content-type": "application/vnd.tcpdump.pcap"},
+        )
+    )
     call = {
         "jsonrpc": "2.0",
         "id": 9,
@@ -338,8 +359,11 @@ async def test_profiler_report_links_serve_each_file_once_without_a_jwt(
 
         assert (await http.get(route)).status_code == 404
         assert (await http.get("/profiler-report/nope")).status_code == 404
-    # The core token check ran with the caller's own JWT.
-    assert respx.calls[0].request.headers["Authorization"] == "Bearer core.jwt.abc123"
+    # Every core call, the listing and each file, carried the caller's own JWT.
+    assert len(respx.calls) == 3
+    assert {c.request.headers["Authorization"] for c in respx.calls} == {
+        "Bearer core.jwt.abc123"
+    }
 
 
 def test_ticket_download_routes_are_the_only_routes_without_a_jwt(mcp):
@@ -378,8 +402,8 @@ def test_ticket_download_routes_are_the_only_routes_without_a_jwt(mcp):
         ),
         # Not a scheme: fall back to the one the request arrived on.
         (
-            {"Host": "10.0.0.5:8766", "X-Forwarded-Proto": "javascript"},
-            "http://10.0.0.5:8766/pcap/",
+            {"Host": "127.0.0.1:8768", "X-Forwarded-Proto": "javascript"},
+            "http://127.0.0.1:8768/pcap/",
         ),
         # A Host that is not a plain host[:port] gets no link or curl command.
         ({"Host": "evil'; rm -rf ~; echo '"}, None),

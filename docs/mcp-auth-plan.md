@@ -1,6 +1,6 @@
 # MCP Authentication & Transport Plan (wlanpi-core / wlanpi-mcp)
 
-**Status:** Design record. The authentication and transport described here is implemented in wlanpi-core; see [mcp-rollout.md](./mcp-rollout.md) for what landed and what remains.
+**Status:** Design record. The authentication and transport described here is implemented in wlanpi-core; see [mcp-rollout.md](./mcp-rollout.md) for what landed and what remains. The plaintext MCP port `:8766` it refers to has since been removed (#17): MCP is served only over TLS on `:8767` (`https://<wlanpi>:8767/mcp`).
 **Scope:** How a user (student), an MCP client harness, wlanpi-mcp, and wlanpi-core authenticate to each other — for the Prague release and beyond.
 **Deployment model assumed:** one WLAN Pi per student. The student *owns* their device. Adversaries are other people on the shared classroom LAN, not co-users of the same box. Other on-box or companion apps may mint their own tokens (per-`device_id` tokens are already supported by core).
 
