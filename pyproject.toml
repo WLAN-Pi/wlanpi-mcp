@@ -20,8 +20,11 @@ classifiers = [
 ]
 
 dependencies = [
+    # >=1.21.1: 1.10 adds transport_security and structured_output, 1.12
+    # serves streamable_http_path without a 307 to "/mcp/", and anything
+    # older than 1.21.1 fails to import on pydantic >=2.12 without capping it.
     # <2: mcp 2.x renames FastMCP to MCPServer and breaks this server wholesale
-    "mcp[cli]>=1.0,<2",
+    "mcp[cli]>=1.21.1,<2",
     "httpx>=0.27",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
