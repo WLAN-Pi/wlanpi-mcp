@@ -1,3 +1,24 @@
+wlanpi-mcp (0.7.0-1) unstable; urgency=medium
+
+  * Release version 0.7.0
+  * get_reachability takes an optional namespace and runs the gateway,
+    DNS and ping/curl/arping/dig checks inside it, so a Wi-Fi link moved
+    into a namespace by a network config profile can be tested. Omitting
+    it or passing root is unchanged. (#49)
+  * New read-only tool get_wlan_link reports whether a client is
+    associated and, for a Wi-Fi 7 MLO client, the AP MLD and its set-up
+    links. (#52)
+  * get_profiler_reports reads results through wlanpi-core (>= 2.4.8)
+    instead of local files; arguments and result shape unchanged.
+    PROFILER_DATA_DIR is removed. (#58)
+  * list_allowed_services reads the service allowlist from wlanpi-core
+    instead of a local copy. (#65)
+  * Breaking: the plaintext MCP listener on 8766 is removed; use
+    https://<wlanpi>:8767/mcp and trust self-signed-wlanpi.cert. The UFW
+    profile closes 8766/tcp. (#17)
+
+ -- Jake Snyder <jsnyder81@gmail.com>  Wed, 21 Oct 2026 14:39:46 +0000
+
 wlanpi-mcp (0.6.17-6) unstable; urgency=medium
 
   * Remove the plaintext MCP listener on 8766. nginx now fronts the daemon
