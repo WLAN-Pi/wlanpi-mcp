@@ -1,5 +1,6 @@
 """Regression guards for the assembled streamable HTTP app as nginx presents it."""
 
+import asyncio
 import shlex
 from contextlib import asynccontextmanager
 
@@ -9,7 +10,7 @@ import respx
 
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
-from wlanpi_mcp.server import create_server
+from wlanpi_mcp.server import create_http_app, create_server
 
 # What the daemon sees through the nginx front: the client's real Host and
 # Origin are forwarded verbatim (proxy_set_header Host $http_host), so the
@@ -62,11 +63,11 @@ def core(settings):
 
 @pytest.fixture
 def mcp(core):
-    return create_server(core, host="127.0.0.1", port=8768)
+    return create_server(core)
 
 
 @asynccontextmanager
-async def _serve(mcp, *, with_middleware: bool = True):
+async def _serve(mcp):
     """Yield an httpx client bound to the assembled app, with its lifespan running.
 
     httpx's ASGITransport does not run the app lifespan, which is where the
@@ -74,14 +75,9 @@ async def _serve(mcp, *, with_middleware: bool = True):
     is a context manager rather than an async fixture because the manager's
     task group must be entered and exited in the same task, and pytest-asyncio
     tears async-generator fixtures down elsewhere.
-
-    Pass with_middleware=False to omit BearerTokenMiddleware, so the contextvar
-    it would set stays untouched and get_token() has only the transport-bound
-    request to read from.
     """
-    app = mcp.streamable_http_app()
-    if with_middleware:
-        app.add_middleware(BearerTokenMiddleware)
+    app = create_http_app(mcp)
+    app.add_middleware(BearerTokenMiddleware)
     transport = httpx.ASGITransport(app=app)
     async with mcp.session_manager.run():
         async with httpx.AsyncClient(
@@ -91,10 +87,10 @@ async def _serve(mcp, *, with_middleware: bool = True):
 
 
 def test_dns_rebinding_protection_is_off_for_loopback_bind(mcp):
-    # MCPServer flips this on automatically for host=127.0.0.1; the nginx front
-    # forwards LAN Host headers, so it must stay off (the Bearer gate is the
-    # protection).
-    security = mcp.settings.transport_security
+    # The nginx front forwards LAN Host headers, so the check must stay off
+    # (the Bearer gate is the protection).
+    create_http_app(mcp)
+    security = mcp.session_manager.security_settings
     assert security is not None
     assert security.enable_dns_rebinding_protection is False
 
@@ -102,9 +98,10 @@ def test_dns_rebinding_protection_is_off_for_loopback_bind(mcp):
 def test_transport_is_stateless_json_on_mcp_path(mcp):
     # Stateless is the point of the move: no server-side session for a
     # reconnecting client to strand on. JSON responses keep nginx/curl simple.
-    assert mcp.settings.streamable_http_path == "/mcp"
-    assert mcp.settings.stateless_http is True
-    assert mcp.settings.json_response is True
+    app = create_http_app(mcp)
+    assert any(r.path == "/mcp" for r in app.routes)
+    assert mcp.session_manager.stateless is True
+    assert mcp.session_manager.json_response is True
 
 
 @pytest.mark.parametrize("headers", FORWARDED_HEADERS)
@@ -175,34 +172,122 @@ async def test_each_request_carries_its_own_token(mcp):
 
 
 @respx.mock
-async def test_transport_populates_request_header_token(mcp):
-    # get_token() reads the Authorization header off the Starlette request the
-    # streamable HTTP transport binds to each MCP call (the SDK's request_ctx).
-    # The middleware path would set the same token on the contextvar, so it
-    # cannot distinguish the two. Run the app WITHOUT the middleware and poison
-    # the contextvar with a decoy: only a transport-bound request can supply the
-    # real token, so this fails if the SDK ever stops populating request_ctx.
-    from wlanpi_mcp.auth.token_context import current_token
+async def test_concurrent_requests_keep_their_own_token(mcp):
+    # Tool handlers run in the contextvars of the request that carried the call
+    # (there is no request_ctx in mcp 2.x), so two in-flight requests with
+    # different tokens must each reach core with their own Bearer.
+    arrivals = 0
+    both_arrived = asyncio.Event()
 
+    async def device_info(request: httpx.Request) -> httpx.Response:
+        # Barrier: neither call answers until both are in flight at once.
+        nonlocal arrivals
+        arrivals += 1
+        if arrivals == 2:
+            both_arrived.set()
+        await asyncio.wait_for(both_arrived.wait(), 2)
+        return httpx.Response(200, json={"hostname": request.headers["Authorization"]})
+
+    respx.get(DEVICE_INFO_URL).mock(side_effect=device_info)
+    async with _serve(mcp) as http:
+        responses = await asyncio.gather(
+            *(
+                http.post(
+                    "/mcp",
+                    json=_call_tool("get_device_info"),
+                    headers={"Authorization": f"Bearer {token}", **MCP_HEADERS},
+                )
+                for token in ("token-A", "token-B")
+            )
+        )
+    for token, response in zip(("token-A", "token-B"), responses, strict=True):
+        assert response.status_code == 200, response.text
+        result = response.json()["result"]
+        assert result["isError"] is False
+        assert result["structuredContent"] == {"hostname": f"Bearer {token}"}
+
+
+@respx.mock
+async def test_modern_protocol_request_forwards_its_own_bearer(mcp):
+    # 2026-07-28 requests carry no handshake and are routed by headers; they
+    # take a different SDK path than the stateless 2025-era POSTs above.
     route = respx.get(DEVICE_INFO_URL).mock(
         return_value=httpx.Response(200, json={"hostname": "wlanpi-9be"})
     )
-    reset = current_token.set("decoy.contextvar.token")
-    try:
-        async with _serve(mcp, with_middleware=False) as http:
-            response = await http.post(
-                "/mcp",
-                json=_call_tool("get_device_info"),
-                headers={"Authorization": "Bearer header.token", **MCP_HEADERS},
-            )
-        assert response.status_code == 200, response.text
-        assert response.json()["result"]["isError"] is False
-        # The decoy contextvar is still set, so only a transport-bound request
-        # could have produced the real token; core saw the header, not the decoy.
-        assert route.call_count == 1
-        assert route.calls[0].request.headers["Authorization"] == "Bearer header.token"
-    finally:
-        current_token.reset(reset)
+    version = "2026-07-28"
+    call = _call_tool("get_device_info")
+    call["params"]["_meta"] = {
+        "io.modelcontextprotocol/protocolVersion": version,
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+    async with _serve(mcp) as http:
+        response = await http.post(
+            "/mcp",
+            json=call,
+            headers={
+                "Authorization": "Bearer modern.token",
+                "MCP-Protocol-Version": version,
+                "Mcp-Method": "tools/call",
+                "Mcp-Name": "get_device_info",
+                **MCP_HEADERS,
+            },
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["result"]["isError"] is False, body
+    assert route.calls[0].request.headers["Authorization"] == "Bearer modern.token"
+
+
+@respx.mock
+async def test_unreachable_core_reaches_the_client(mcp):
+    # A transport failure must not collapse into a generic tool error.
+    respx.get(DEVICE_INFO_URL).mock(
+        side_effect=httpx.ConnectError("[Errno 111] Connection refused")
+    )
+    async with _serve(mcp) as http:
+        reply = await http.post(
+            "/mcp",
+            json=_call_tool("get_device_info"),
+            headers={"Authorization": "Bearer t", **MCP_HEADERS},
+        )
+    result = reply.json()["result"]
+    assert result["isError"] is True
+    text = result["content"][0]["text"]
+    assert "wlanpi-core unreachable" in text and "Connection refused" in text, text
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "expected"),
+    [
+        (409, {"detail": "interface busy"}, ["409", "interface busy"]),
+        (
+            422,
+            {"detail": {"message": "nope", "outcomes": ["a", "b"]}},
+            ["422", "nope", "outcomes"],
+        ),
+        (502, "upstream exploded", ["502", "upstream exploded"]),
+    ],
+)
+@respx.mock
+async def test_core_error_detail_reaches_the_client(mcp, status, body, expected):
+    # mcp 2.1+ reduces an arbitrary exception to "Error executing tool X";
+    # CoreAPIError is a ToolError so core's status and detail still get through.
+    if isinstance(body, str):
+        response = httpx.Response(status, text=body)
+    else:
+        response = httpx.Response(status, json=body)
+    respx.get(DEVICE_INFO_URL).mock(return_value=response)
+    async with _serve(mcp) as http:
+        reply = await http.post(
+            "/mcp",
+            json=_call_tool("get_device_info"),
+            headers={"Authorization": "Bearer t", **MCP_HEADERS},
+        )
+    result = reply.json()["result"]
+    assert result["isError"] is True
+    text = result["content"][0]["text"]
+    for part in expected:
+        assert part in text, text
 
 
 @respx.mock

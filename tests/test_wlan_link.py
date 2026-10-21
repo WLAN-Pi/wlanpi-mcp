@@ -3,7 +3,7 @@
 import httpx
 import pytest
 import respx
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from wlanpi_mcp.client.core_client import CoreAPIError
@@ -50,7 +50,9 @@ def _tools(client):
 async def test_get_wlan_link_returns_core_links(client):
     route = respx.get(URL).mock(return_value=httpx.Response(200, json=MLO))
 
-    result = await _tools(client)["get_wlan_link"].run({"interface": "mlo-client"})
+    result = await _tools(client)["get_wlan_link"].run(
+        {"interface": "mlo-client"}, Context()
+    )
 
     assert route.called
     assert result["connected"] is True
@@ -72,7 +74,9 @@ async def test_get_wlan_link_not_connected(client):
         )
     )
 
-    result = await _tools(client)["get_wlan_link"].run({"interface": "wlan0"})
+    result = await _tools(client)["get_wlan_link"].run(
+        {"interface": "wlan0"}, Context()
+    )
 
     assert result["connected"] is False
 
@@ -94,7 +98,9 @@ async def test_get_wlan_link_passes_older_core_payload_through(client):
         return_value=httpx.Response(200, json=legacy)
     )
 
-    result = await _tools(client)["get_wlan_link"].run({"interface": "wlan0"})
+    result = await _tools(client)["get_wlan_link"].run(
+        {"interface": "wlan0"}, Context()
+    )
 
     assert result == legacy
 
@@ -108,7 +114,9 @@ async def test_get_wlan_link_core_error_reaches_the_client(client):
     )
 
     with pytest.raises(ToolError) as exc_info:
-        await _tools(client)["get_wlan_link"].run({"interface": "mlo-client"})
+        await _tools(client)["get_wlan_link"].run(
+            {"interface": "mlo-client"}, Context()
+        )
 
     cause = exc_info.value.__cause__
     assert isinstance(cause, CoreAPIError)

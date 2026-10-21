@@ -99,16 +99,15 @@ the tag can never bypass authentication, only demand more of the caller.
 ## One token per request: the stateless transport
 
 The daemon serves streamable HTTP in stateless mode (`stateless_http=True` in
-`create_server`). There is no server-side MCP session: every `POST /mcp` is a complete
+`create_http_app`). There is no server-side MCP session: every `POST /mcp` is a complete
 exchange, handled by a server instance created for that request and torn down after it.
 Two consequences:
 
-- **The token that reaches wlanpi-core is the Bearer on that very request.** The transport
-  binds the Starlette request to the MCP call, and `get_token()`
-  (`wlanpi_mcp/auth/token_context.py`) reads the `Authorization` header off it, falling
-  back to the contextvar the middleware set. Tool calls run in a task the SDK's session
-  manager spawns, so reading the request itself rather than relying on contextvar
-  inheritance is what makes this robust.
+- **The token that reaches wlanpi-core is the Bearer on that very request.**
+  The middleware sets a contextvar from that request's `Authorization` header, and
+  `get_token()` (`wlanpi_mcp/auth/token_context.py`) reads only that contextvar. mcp 2.x
+  runs each handler in the context of the request that carried the call, so concurrent
+  requests with different tokens stay isolated.
 - **There is no session for another caller to inject into.** Under the legacy SSE
   transport a session spanned a long-lived `GET /sse` plus per-call `POST /messages/`
   requests routed by `session_id`, and the server had to bind each session to the token

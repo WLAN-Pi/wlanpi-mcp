@@ -1,6 +1,7 @@
 import httpx
 import pytest
 import respx
+from mcp.server.mcpserver import Context
 
 # ── WLAN ─────────────────────────────────────────────────────────────────────
 
@@ -148,7 +149,8 @@ async def test_start_profiler_forwards_newer_flags():
             "noprofilertlv": True,
             "oui_update": False,
             "no_bpf_filters": True,
-        }
+        },
+        Context(),
     )
 
     assert mock_client.post.call_args.kwargs["json"] == {
@@ -178,7 +180,7 @@ async def test_start_profiler_returns_core_failure_reason():
     register(mcp, mock_client)
 
     tool = mcp._tool_manager._tools["start_profiler"]
-    result = await tool.run({"interface": "wlan0"})
+    result = await tool.run({"interface": "wlan0"}, Context())
 
     assert result == failure
     # The tool description tells the client how to read the result.
@@ -199,7 +201,7 @@ async def test_purge_profiler_data_posts_to_purge():
     mcp = MCPServer("test")
     register(mcp, mock_client)
 
-    result = await mcp._tool_manager._tools["purge_profiler_data"].run({})
+    result = await mcp._tool_manager._tools["purge_profiler_data"].run({}, Context())
 
     mock_client.post.assert_awaited_once_with("/api/v1/profiler/purge")
     assert result == {"files": 12, "bytes": 48213}
@@ -219,21 +221,21 @@ async def test_get_reachability_forwards_targets():
     register(mcp, mock_client)
     tool = mcp._tool_manager._tools["get_reachability"]
 
-    await tool.run({"targets": ["8.8.8.8", "1.1.1.1"]})
+    await tool.run({"targets": ["8.8.8.8", "1.1.1.1"]}, Context())
     assert mock_client.get.call_args.kwargs["params"] == {
         "targets": ["8.8.8.8", "1.1.1.1"]
     }
 
-    await tool.run({"namespace": "ns_a"})
+    await tool.run({"namespace": "ns_a"}, Context())
     assert mock_client.get.call_args.kwargs["params"] == {"namespace": "ns_a"}
 
-    await tool.run({"targets": ["8.8.8.8"], "namespace": "ns_a"})
+    await tool.run({"targets": ["8.8.8.8"], "namespace": "ns_a"}, Context())
     assert mock_client.get.call_args.kwargs["params"] == {
         "targets": ["8.8.8.8"],
         "namespace": "ns_a",
     }
 
-    await tool.run({})
+    await tool.run({}, Context())
     assert mock_client.get.call_args.kwargs["params"] is None
 
 
@@ -261,7 +263,7 @@ async def test_get_reachability_unknown_namespace_raises(reachability_tool):
         return_value=httpx.Response(400, json={"error": "unknown namespace: ns_x"})
     )
     with pytest.raises(ToolError) as exc:
-        await reachability_tool.run({"namespace": "ns_x"})
+        await reachability_tool.run({"namespace": "ns_x"}, Context())
     cause = exc.value.__cause__
     assert isinstance(cause, CoreAPIError)
     assert cause.status_code == 400
@@ -274,7 +276,7 @@ async def test_get_reachability_no_gateway_is_returned(reachability_tool):
     respx.get(REACHABILITY).mock(
         return_value=httpx.Response(503, json={"error": "No default gateway found"})
     )
-    result = await reachability_tool.run({"namespace": "ns_a"})
+    result = await reachability_tool.run({"namespace": "ns_a"}, Context())
     assert result == {"error": "No default gateway found", "namespace": "ns_a"}
 
 
@@ -288,7 +290,7 @@ async def test_get_reachability_plain_text_no_gateway(
     respx.get(REACHABILITY).mock(
         return_value=httpx.Response(503, text="No default gateway")
     )
-    result = await reachability_tool.run(args)
+    result = await reachability_tool.run(args, Context())
     assert result == {"error": "No default gateway", "namespace": expected_ns}
 
 
@@ -302,7 +304,7 @@ async def test_get_reachability_other_503_raises(reachability_tool):
         return_value=httpx.Response(503, json={"error": "Reachability check failed"})
     )
     with pytest.raises(ToolError) as exc:
-        await reachability_tool.run({})
+        await reachability_tool.run({}, Context())
     cause = exc.value.__cause__
     assert isinstance(cause, CoreAPIError)
     assert cause.status_code == 503

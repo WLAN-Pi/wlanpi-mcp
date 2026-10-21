@@ -32,7 +32,6 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import BlobResourceContents, EmbeddedResource
-from pydantic import AnyUrl
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
@@ -531,8 +530,8 @@ def register(mcp: MCPServer, client: CoreClient) -> None:
         return EmbeddedResource(
             type="resource",
             resource=BlobResourceContents(
-                uri=AnyUrl(f"file://{resolved}"),
-                mimeType=PCAP_MIME,
+                uri=f"file://{resolved}",
+                mime_type=PCAP_MIME,
                 blob=blob,
             ),
         )

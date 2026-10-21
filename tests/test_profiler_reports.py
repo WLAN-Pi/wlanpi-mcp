@@ -13,7 +13,7 @@ from urllib.parse import unquote
 
 import httpx
 import pytest
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 
 from wlanpi_mcp import download_links
 from wlanpi_mcp.client.core_client import CoreAPIError
@@ -141,7 +141,7 @@ async def test_json_returns_parsed_profiles_without_the_frame(core):
     _write_client(core, MAC, bands=("5GHz", "2.4GHz"))
     tool = _tool(core)
 
-    result = await tool.run({})
+    result = await tool.run({}, Context())
 
     core.get.assert_awaited_once_with("/api/v1/profiler/files", params=None)
     # Only the JSON profiles are downloaded for the inline answer.
@@ -167,7 +167,7 @@ async def test_json_can_keep_the_frame(core):
     _write_client(core, MAC)
     tool = _tool(core)
 
-    result = await tool.run({"include_frame": True})
+    result = await tool.run({"include_frame": True}, Context())
 
     assert result["clients"][0]["profiles"][0]["pcapng"] == PROFILE["pcapng"]
 
@@ -178,7 +178,7 @@ async def test_json_lists_session_reports_by_name_only(core):
     core.put("reports/notes.txt", b"not a session report")
     tool = _tool(core)
 
-    result = await tool.run({})
+    result = await tool.run({}, Context())
 
     assert result["session_reports"] == [
         {
@@ -195,7 +195,7 @@ async def test_clients_are_newest_first_and_capped(core):
     _write_client(core, MAC, mtime=2_000)
     tool = _tool(core)
 
-    result = await tool.run({"max_clients": 1})
+    result = await tool.run({"max_clients": 1}, Context())
 
     assert [c["mac"] for c in result["clients"]] == [MAC]
     assert result["clients"][0]["modified"] == "1970-01-01T00:33:20+00:00"
@@ -203,7 +203,7 @@ async def test_clients_are_newest_first_and_capped(core):
     assert result["returned_clients"] == 1
     assert result["truncated"] is True
 
-    everything = await tool.run({"max_clients": 0})
+    everything = await tool.run({"max_clients": 0}, Context())
     assert [c["mac"] for c in everything["clients"]] == [MAC, OTHER]
     assert everything["truncated"] is False
 
@@ -216,7 +216,7 @@ async def test_mac_filter_accepts_common_formats(core, mac):
     _write_client(core, OTHER)
     tool = _tool(core)
 
-    result = await tool.run({"mac": mac})
+    result = await tool.run({"mac": mac}, Context())
 
     core.get.assert_awaited_once_with("/api/v1/profiler/files", params={"mac": MAC})
     assert [c["mac"] for c in result["clients"]] == [MAC]
@@ -227,7 +227,7 @@ async def test_mac_filter_accepts_common_formats(core, mac):
 async def test_a_non_mac_filter_is_refused_before_core_is_called(core, mac):
     tool = _tool(core)
 
-    result = await tool.run({"mac": mac})
+    result = await tool.run({"mac": mac}, Context())
 
     assert result["error"].startswith("not a MAC address")
     core.get.assert_not_awaited()
@@ -237,7 +237,7 @@ async def test_unknown_mac_says_so(core):
     _write_client(core, MAC)
     tool = _tool(core)
 
-    result = await tool.run({"mac": OTHER})
+    result = await tool.run({"mac": OTHER}, Context())
 
     assert result["clients"] == []
     assert result["note"] == f"no profile for {OTHER}"
@@ -246,7 +246,7 @@ async def test_unknown_mac_says_so(core):
 async def test_no_profiles_is_not_an_error(core):
     tool = _tool(core)
 
-    result = await tool.run({})
+    result = await tool.run({}, Context())
 
     assert result["clients"] == [] and result["total_clients"] == 0
     assert result["session_reports"] == []
@@ -258,7 +258,7 @@ async def test_a_corrupt_profile_is_reported_not_fatal(core):
     core.put(f"clients/{MAC}/{MAC}_6GHz.json", b"{truncated")
     tool = _tool(core)
 
-    result = await tool.run({})
+    result = await tool.run({}, Context())
 
     profiles = result["clients"][0]["profiles"]
     bad = [p for p in profiles if "error" in p]
@@ -279,7 +279,7 @@ async def test_a_profile_purged_after_the_listing_is_reported_not_fatal(core):
     core.get.side_effect = list_then_purge
     tool = _tool(core)
 
-    result = await tool.run({})
+    result = await tool.run({}, Context())
 
     by_file = {p["file"]: p for p in result["clients"][0]["profiles"]}
     assert "404" in by_file[gone]["error"]
@@ -291,7 +291,7 @@ async def test_a_client_directory_core_lists_that_is_not_a_mac_is_skipped(core):
     core.put("clients/not-a-mac/x.json", b"{}")
     tool = _tool(core)
 
-    result = await tool.run({"max_clients": 0})
+    result = await tool.run({"max_clients": 0}, Context())
 
     assert [c["mac"] for c in result["clients"]] == [MAC]
 
@@ -300,7 +300,7 @@ async def test_file_paths_are_quoted_into_the_core_url(core):
     core.put(f"clients/{MAC}/{MAC}_5GHz #1.json", json.dumps(PROFILE).encode())
     tool = _tool(core)
 
-    await tool.run({})
+    await tool.run({}, Context())
 
     [call] = core.get_bytes.await_args_list
     assert call.args[0] == (
@@ -320,7 +320,7 @@ async def test_a_token_core_refuses_is_a_tool_error_with_core_detail(core, outpu
     tool = _tool(core)
 
     with pytest.raises(ToolError, match="401: Invalid token"):
-        await tool.run({"output": output})
+        await tool.run({"output": output}, Context())
     core.get_bytes.assert_not_awaited()
     assert profiler_reports._TICKETS == {}
 
@@ -329,7 +329,7 @@ async def test_an_older_core_without_the_endpoint_says_to_upgrade(core):
     core.get.side_effect = _core_error(404, "Not Found")
     tool = _tool(core)
 
-    result = await tool.run({})
+    result = await tool.run({}, Context())
 
     assert set(result) == {"error"}
     assert "2.4.8" in result["error"]
@@ -343,7 +343,7 @@ async def test_a_core_error_on_a_file_is_not_swallowed(core):
     tool = _tool(core)
 
     with pytest.raises(ToolError, match="500"):
-        await tool.run({"output": "links"})
+        await tool.run({"output": "links"}, Context())
     assert profiler_reports._TICKETS == {}
 
 
@@ -355,7 +355,7 @@ async def test_links_mint_one_ticket_per_file_with_snapshots(core):
     core.put("reports/profiler-2026-10-04.csv", b"Client_Mac,OUI_Manuf\n")
     tool = _tool(core)
 
-    result = await tool.run({"output": "links"})
+    result = await tool.run({"output": "links"}, Context())
 
     paths = {f["path"] for f in result["files"]}
     assert paths == {
@@ -401,7 +401,7 @@ async def test_links_skip_a_file_purged_after_the_listing(core):
     core.get.side_effect = list_then_purge
     tool = _tool(core)
 
-    result = await tool.run({"output": "links"})
+    result = await tool.run({"output": "links"}, Context())
 
     assert gone not in {f["path"] for f in result["files"]}
     assert len(result["files"]) == 2
@@ -412,7 +412,9 @@ async def test_links_can_leave_out_the_session_csvs(core):
     core.put("reports/profiler-2026-10-04.csv", b"x\n")
     tool = _tool(core)
 
-    result = await tool.run({"output": "links", "include_session_csv": False})
+    result = await tool.run(
+        {"output": "links", "include_session_csv": False}, Context()
+    )
 
     assert not any(f["path"].startswith("reports/") for f in result["files"])
     assert not any("reports/" in c.args[0] for c in core.get_bytes.await_args_list)
@@ -425,7 +427,9 @@ async def test_links_build_urls_and_one_curl_from_the_request(core, monkeypatch)
     )
     tool = _tool(core)
 
-    result = await tool.run({"output": "links", "include_session_csv": False})
+    result = await tool.run(
+        {"output": "links", "include_session_csv": False}, Context()
+    )
 
     urls = [f["download_url"] for f in result["files"]]
     assert all(
@@ -448,7 +452,7 @@ async def test_zip_bundles_every_file_behind_one_ticket(core, monkeypatch):
     monkeypatch.setattr(download_links, "request_base_url", lambda: "https://h:8767")
     tool = _tool(core)
 
-    result = await tool.run({"output": "zip"})
+    result = await tool.run({"output": "zip"}, Context())
 
     [download] = profiler_reports._TICKETS.values()
     assert download.media_type == "application/zip"
@@ -479,7 +483,7 @@ async def test_zip_respects_the_mac_filter(core):
     tool = _tool(core)
 
     result = await tool.run(
-        {"output": "zip", "mac": OTHER, "include_session_csv": False}
+        {"output": "zip", "mac": OTHER, "include_session_csv": False}, Context()
     )
 
     assert all(p.startswith(f"clients/{OTHER}/") for p in result["files"])
@@ -491,7 +495,7 @@ async def test_an_oversized_request_is_refused_before_downloading(core, monkeypa
     monkeypatch.setattr(profiler_reports, "MAX_DOWNLOAD_BYTES", 10)
     tool = _tool(core)
 
-    result = await tool.run({"output": "zip"})
+    result = await tool.run({"output": "zip"}, Context())
 
     assert "byte limit" in result["error"]
     core.get_bytes.assert_not_awaited()
@@ -504,7 +508,7 @@ async def test_invalid_output_is_rejected_by_the_schema(core):
     tool = _tool(core)
 
     with pytest.raises(ToolError):
-        await tool.run({"output": "tarball"})
+        await tool.run({"output": "tarball"}, Context())
     core.get.assert_not_awaited()
 
 
@@ -515,7 +519,7 @@ async def test_expired_tickets_are_pruned_on_the_next_mint(core):
     )
     tool = _tool(core)
 
-    await tool.run({"output": "zip"})
+    await tool.run({"output": "zip"}, Context())
 
     assert "stale" not in profiler_reports._TICKETS
     assert len(profiler_reports._TICKETS) == 1

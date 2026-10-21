@@ -6,10 +6,11 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from starlette.authentication import AuthCredentials
 from starlette.datastructures import Headers
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from wlanpi_mcp.auth.token_context import current_token
+from wlanpi_mcp.auth.token_context import current_request, current_token
 
 #: Path prefixes served without a Bearer token because the route itself checks
 #: a one-time ticket (tools/capture_file.py DOWNLOAD_PREFIX,
@@ -52,10 +53,8 @@ class BearerTokenMiddleware:
 
     Pure ASGI middleware (not BaseHTTPMiddleware) so the downstream app runs
     in the same task. The streamable HTTP transport starts the per-request
-    MCP server task from inside this request, so the contextvar set here is
-    inherited by that task. The primary token source is nonetheless the
-    request itself: get_token() reads the Authorization header off the
-    Starlette request that the transport binds to each MCP call.
+    MCP server task from inside this request, so the contextvars set here
+    (the token and the Starlette request) are what a tool sees, per request.
 
     It also publishes a per-token principal on scope["user"] so a stateful
     session manager would bind each session to its opening token (see
@@ -100,7 +99,9 @@ class BearerTokenMiddleware:
         scope["auth"] = AuthCredentials()
 
         ctx_token = current_token.set(token)
+        req_token = current_request.set(Request(scope))
         try:
             await self.app(scope, receive, send)
         finally:
+            current_request.reset(req_token)
             current_token.reset(ctx_token)

@@ -2,7 +2,9 @@
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.applications import Starlette
 
+from wlanpi_mcp.__version__ import __version__
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.prompts import diagnostics
 from wlanpi_mcp.resources import bluetooth as bt_res
@@ -28,9 +30,7 @@ from wlanpi_mcp.tools import (
 )
 
 
-def create_server(
-    client: CoreClient, host: str = "127.0.0.1", port: int = 8768
-) -> MCPServer:
+def create_server(client: CoreClient) -> MCPServer:
     """Create a WLAN Pi MCP server with all tools, resources, and prompts registered."""
     mcp = MCPServer(
         "WLAN Pi",
@@ -39,29 +39,7 @@ def create_server(
             "including device info, network interfaces, service management, Wi-Fi scanning, "
             "profiler control, and diagnostics."
         ),
-        host=host,
-        port=port,
-        # Streamable HTTP, stateless, on /mcp. Stateless means every POST is a
-        # complete exchange with no server-side session: a client that
-        # reconnects after a daemon restart or an idle gap cannot strand
-        # itself on a stale session (the legacy SSE transport did exactly
-        # that with Claude Code, every tool call failing with -32602 until
-        # the client was restarted). Nothing here needs server-initiated
-        # messages, so nothing is lost. json_response returns each result as
-        # a plain JSON body instead of an SSE-wrapped stream, which keeps the
-        # nginx front and curl debugging simple.
-        streamable_http_path="/mcp",
-        stateless_http=True,
-        json_response=True,
-        # The daemon binds loopback-only behind nginx, which forwards the
-        # client's real Host header (e.g. 10.254.102.51:8767). MCPServer would
-        # otherwise auto-enable DNS rebinding protection for a loopback bind
-        # and answer every /mcp request with 421 Misdirected Request. The
-        # Bearer JWT gate in middleware/bearer_token.py is what protects the
-        # transport: a rebinding page in a browser cannot attach that header.
-        transport_security=TransportSecuritySettings(
-            enable_dns_rebinding_protection=False
-        ),
+        version=__version__,
     )
 
     # Phase 1 — system, network, utils
@@ -104,3 +82,30 @@ def create_server(
     diagnostics.register(mcp)
 
     return mcp
+
+
+def create_http_app(mcp: MCPServer) -> Starlette:
+    """Build the streamable HTTP ASGI app with the daemon's transport settings."""
+    return mcp.streamable_http_app(
+        # Streamable HTTP, stateless, on /mcp. Stateless means every POST is a
+        # complete exchange with no server-side session: a client that
+        # reconnects after a daemon restart or an idle gap cannot strand
+        # itself on a stale session (the legacy SSE transport did exactly
+        # that with Claude Code, every tool call failing with -32602 until
+        # the client was restarted). Nothing here needs server-initiated
+        # messages, so nothing is lost. json_response returns each result as
+        # a plain JSON body instead of an SSE-wrapped stream, which keeps the
+        # nginx front and curl debugging simple.
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+        # The daemon binds loopback-only behind nginx, which forwards the
+        # client's real Host header (e.g. 10.254.102.51:8767). MCPServer would
+        # otherwise auto-enable DNS rebinding protection for a loopback bind
+        # and answer every /mcp request with 421 Misdirected Request. The
+        # Bearer JWT gate in middleware/bearer_token.py is what protects the
+        # transport: a rebinding page in a browser cannot attach that header.
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        ),
+    )

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
+from mcp.server.mcpserver.exceptions import ToolError
 
 from wlanpi_mcp.auth.token_context import get_token
 from wlanpi_mcp.config import Settings
@@ -19,7 +20,7 @@ _client: Optional["CoreClient"] = None
 _MAX_TEXT_DETAIL = 500
 
 
-class CoreAPIError(httpx.HTTPStatusError):
+class CoreAPIError(httpx.HTTPStatusError, ToolError):
     """
     A non-2xx response from wlanpi-core, with core's error detail intact.
 
@@ -43,6 +44,23 @@ class CoreAPIError(httpx.HTTPStatusError):
             request=response.request,
             response=response,
         )
+
+
+# The error classes below are ToolErrors on top of their httpx/stdlib base:
+# mcp 2.1+ reports any other exception from a tool as a bare "Error executing
+# tool X", dropping the message, while the base keeps existing handlers valid.
+
+
+class MissingTokenError(RuntimeError, ToolError):
+    """No wlanpi-core token is available."""
+
+
+class CoreUnavailableError(httpx.TransportError, ToolError):
+    """wlanpi-core could not be reached or did not answer in time."""
+
+
+class CoreBadResponseError(ValueError, ToolError):
+    """wlanpi-core answered 2xx with a body that is not JSON."""
 
 
 def _error_detail(response: httpx.Response) -> Any:
@@ -137,14 +155,15 @@ class CoreClient:
 
         Public so non-HTTP core transports (the capture WebSocket, which sends
         the token in its first message) reuse this resolution instead of
-        duplicating it. Raises RuntimeError when no token is available.
+        duplicating it. Raises MissingTokenError (a RuntimeError) when no token
+        is available.
         """
         return self._current_token()
 
     def _current_token(self) -> str:
         token = get_token() or self._settings.WLANPI_CORE_TOKEN
         if not token:
-            raise RuntimeError(
+            raise MissingTokenError(
                 "No wlanpi-core token available. Connect with "
                 "'Authorization: Bearer <token>' (HTTP) or set WLANPI_CORE_TOKEN "
                 "(stdio). Tokens are issued by wlanpi-core at /api/v1/auth/token."
@@ -152,7 +171,14 @@ class CoreClient:
         return token
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        return (await self._send(method, path, **kwargs)).json()
+        response = await self._send(method, path, **kwargs)
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise CoreBadResponseError(
+                f"wlanpi-core returned {response.status_code} with a body "
+                f"that is not JSON: {exc}"
+            ) from exc
 
     async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         headers = {
@@ -160,9 +186,17 @@ class CoreClient:
             "Authorization": f"Bearer {self._current_token()}",
             "X-Wlanpi-Client": self.CLIENT_TAG,
         }
-        response = await self._http.request(
-            method, path, **{**kwargs, "headers": headers}
-        )
+        try:
+            response = await self._http.request(
+                method, path, **{**kwargs, "headers": headers}
+            )
+        except httpx.TransportError as exc:
+            what = str(exc) or type(exc).__name__
+            if isinstance(exc, httpx.TimeoutException):
+                message = f"wlanpi-core did not answer in time ({what})"
+            else:
+                message = f"wlanpi-core unreachable: {what}"
+            raise CoreUnavailableError(message) from exc
         if not response.is_success:
             raise CoreAPIError(response)
         return response

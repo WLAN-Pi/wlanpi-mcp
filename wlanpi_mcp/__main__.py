@@ -56,7 +56,7 @@ def main() -> None:
 
     from wlanpi_mcp.server import create_server
 
-    mcp = create_server(client, host=host, port=port)
+    mcp = create_server(client)
 
     if args.transport == "stdio":
         mcp.run(transport="stdio")
@@ -68,12 +68,13 @@ def _run_http(mcp: MCPServer, settings: Settings, host: str, port: int) -> None:
     import uvicorn
 
     from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
+    from wlanpi_mcp.server import create_http_app
 
-    # MCPServer exposes the Starlette ASGI app for streamable HTTP via
-    # streamable_http_app(); its lifespan runs the session manager, which
-    # uvicorn drives. Every request must present a wlanpi-core JWT, which is
-    # passed through to wlanpi-core on API calls (validated there, not here).
-    http_app = mcp.streamable_http_app()
+    # create_http_app() builds the Starlette ASGI app for streamable HTTP;
+    # its lifespan runs the session manager, which uvicorn drives. Every
+    # request must present a wlanpi-core JWT, which is passed through to
+    # wlanpi-core on API calls (validated there, not here).
+    http_app = create_http_app(mcp)
     http_app.add_middleware(BearerTokenMiddleware)
 
     uvicorn.run(

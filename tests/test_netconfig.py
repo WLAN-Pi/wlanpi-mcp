@@ -10,7 +10,7 @@ import json
 import httpx
 import pytest
 import respx
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from wlanpi_mcp.client.core_client import CoreAPIError
@@ -52,7 +52,7 @@ async def test_core_error_shapes_reach_the_mcp_client(tools):
     )
 
     with pytest.raises(ToolError) as invalid:
-        await tools["activate_network_config"].run({"id": "lab"})
+        await tools["activate_network_config"].run({"id": "lab"}, Context())
     cause = invalid.value.__cause__
     assert isinstance(cause, CoreAPIError)
     assert cause.status_code == 422
@@ -62,7 +62,7 @@ async def test_core_error_shapes_reach_the_mcp_client(tools):
     assert "WPA2-PSK requires a psk" in str(invalid.value)
 
     with pytest.raises(ToolError) as busy:
-        await tools["reset_network_namespaces"].run({"namespaces": ["x"]})
+        await tools["reset_network_namespaces"].run({"namespaces": ["x"]}, Context())
     cause = busy.value.__cause__
     assert isinstance(cause, CoreAPIError)
     assert cause.status_code == 409
@@ -89,7 +89,7 @@ async def test_partial_activation_is_returned_whole(tools):
         return_value=httpx.Response(200, json=body)
     )
     result = await tools["activate_network_config"].run(
-        {"id": "lab", "override_active": True}
+        {"id": "lab", "override_active": True}, Context()
     )
     assert result == body
     assert route.calls[0].request.url.params["override_active"] == "true"
@@ -115,8 +115,10 @@ async def test_leftovers_and_reset_routes(tools):
         return_value=httpx.Response(200, json={"results": []})
     )
 
-    assert await tools["list_network_leftovers"].run({}) == leftovers
-    await tools["reset_network_namespaces"].run({"namespaces": ["profiler_ns"]})
+    assert await tools["list_network_leftovers"].run({}, Context()) == leftovers
+    await tools["reset_network_namespaces"].run(
+        {"namespaces": ["profiler_ns"]}, Context()
+    )
     assert reset.calls[0].request.read() == b'{"namespaces":["profiler_ns"]}'
 
 
@@ -158,7 +160,8 @@ async def test_update_rejects_non_list_before_core(tools, placeholder):
 
     with pytest.raises(ToolError) as err:
         await tools["update_network_config"].run(
-            {"id": "lab", "config_update": {"namespaces": [], "roots": placeholder}}
+            {"id": "lab", "config_update": {"namespaces": [], "roots": placeholder}},
+            Context(),
         )
 
     assert "roots" in str(err.value)
@@ -173,12 +176,12 @@ async def test_update_sends_only_the_lists_given(tools):
     namespaces = [{"namespace": "lab", "interface": "wlan2", "mode": "managed"}]
 
     await tools["update_network_config"].run(
-        {"id": "lab", "config_update": {"namespaces": namespaces}}
+        {"id": "lab", "config_update": {"namespaces": namespaces}}, Context()
     )
     assert json.loads(route.calls.last.request.content) == {"namespaces": namespaces}
 
     await tools["update_network_config"].run(
-        {"id": "lab", "config_update": {"namespaces": None, "roots": []}}
+        {"id": "lab", "config_update": {"namespaces": None, "roots": []}}, Context()
     )
     assert json.loads(route.calls.last.request.content) == {
         "namespaces": None,
@@ -199,7 +202,7 @@ async def test_create_passes_the_profile_through(tools):
     }
 
     await tools["create_network_config"].run(
-        {"config": {"id": "lab", "namespaces": [entry]}}
+        {"config": {"id": "lab", "namespaces": [entry]}}, Context()
     )
 
     assert json.loads(route.calls.last.request.content) == {

@@ -1,7 +1,7 @@
 import httpx
 import pytest
 import respx
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from wlanpi_mcp.tools import system
@@ -48,7 +48,7 @@ async def test_list_allowed_services_reads_core_allowlist(client):
         return_value=httpx.Response(200, json={"services": services})
     )
 
-    result = await _tools(client)["list_allowed_services"].run({})
+    result = await _tools(client)["list_allowed_services"].run({}, Context())
 
     assert route.called
     assert result == {"services": services}
@@ -63,7 +63,9 @@ async def test_service_actions_defer_to_core_allowlist(client, action):
         return_value=httpx.Response(200, json={"name": "iperf2", "active": True})
     )
 
-    result = await _tools(client)[f"{action}_service"].run({"name": "iperf2"})
+    result = await _tools(client)[f"{action}_service"].run(
+        {"name": "iperf2"}, Context()
+    )
 
     assert route.calls.last.request.url.params["name"] == "iperf2"
     assert result["name"] == "iperf2"
@@ -78,4 +80,4 @@ async def test_start_service_surfaces_core_refusal(client):
     )
 
     with pytest.raises(ToolError, match="restricted or does not exist"):
-        await _tools(client)["start_service"].run({"name": "iperf"})
+        await _tools(client)["start_service"].run({"name": "iperf"}, Context())
