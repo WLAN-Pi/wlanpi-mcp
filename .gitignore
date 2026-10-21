@@ -22,3 +22,6 @@ debian/*.debhelper
 
 # Built packages
 *.deb
+
+# Written by build-package-native.sh
+.build-manifest.txt
