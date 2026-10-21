@@ -27,7 +27,7 @@ python -m wlanpi_mcp --transport streamable-http   # HTTP daemon mode (uvicorn, 
 dpkg-buildpackage -us -uc
 ```
 
-`asyncio_mode = auto` is set in pyproject.toml, so async tests don't need `@pytest.mark.asyncio`. Lint and format tooling is configured via tox (`tox -e lint`, `tox -e formatcheck`, `tox -e format`) using flake8/black/isort/autoflake.
+`asyncio_mode = auto` is set in pyproject.toml, so async tests don't need `@pytest.mark.asyncio`. Lint and format tooling is configured via tox: `tox -e lint` (`ruff check` then `mypy`), `tox -e formatcheck` (`ruff format --check`), and `tox -e format` (`ruff format`).
 
 ## Architecture
 
