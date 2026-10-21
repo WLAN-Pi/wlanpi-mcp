@@ -4,7 +4,8 @@ import argparse
 import logging
 import sys
 
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
+
 from wlanpi_mcp.client.core_client import init_client
 from wlanpi_mcp.config import Settings, get_settings
 
@@ -63,12 +64,12 @@ def main() -> None:
         _run_http(mcp, settings, host, port)
 
 
-def _run_http(mcp: FastMCP, settings: Settings, host: str, port: int) -> None:
+def _run_http(mcp: MCPServer, settings: Settings, host: str, port: int) -> None:
     import uvicorn
 
     from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
 
-    # FastMCP exposes the Starlette ASGI app for streamable HTTP via
+    # MCPServer exposes the Starlette ASGI app for streamable HTTP via
     # streamable_http_app(); its lifespan runs the session manager, which
     # uvicorn drives. Every request must present a wlanpi-core JWT, which is
     # passed through to wlanpi-core on API calls (validated there, not here).

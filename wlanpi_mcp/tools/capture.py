@@ -11,7 +11,8 @@ closes the socket before returning, so no ownerless capture is left running.
 import logging
 from typing import Any
 
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
+
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.dot11 import (
     DEFAULT_MAX_FRAMES,
@@ -217,7 +218,7 @@ def _summary(
     return result
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register the streaming capture tools."""
 
     @mcp.tool(annotations=hints.ADDITIVE)

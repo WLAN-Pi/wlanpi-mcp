@@ -1,9 +1,9 @@
 """MCP prompts for network and service diagnostics."""
 
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register the diagnostic prompts."""
 
     @mcp.prompt()

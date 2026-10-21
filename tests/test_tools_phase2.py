@@ -10,13 +10,14 @@ import respx
 async def test_scan_wlan_uses_canonical_endpoint():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.wlan import register
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"nets": []})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["scan_wlan"].fn
@@ -38,10 +39,11 @@ def test_deprecated_wlan_tools_removed():
     """
     from unittest.mock import MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.wlan import register
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, MagicMock())
 
     tools = mcp._tool_manager._tools
@@ -108,13 +110,14 @@ async def test_get_profiler_status(client):
 async def test_start_profiler_builds_minimal_body():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"success": True})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["start_profiler"].fn
@@ -129,13 +132,14 @@ async def test_start_profiler_builds_minimal_body():
 async def test_start_profiler_forwards_newer_flags():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"success": True})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     await mcp._tool_manager._tools["start_profiler"].run(
@@ -158,7 +162,8 @@ async def test_start_profiler_forwards_newer_flags():
 async def test_start_profiler_returns_core_failure_reason():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     failure = {
@@ -169,7 +174,7 @@ async def test_start_profiler_returns_core_failure_reason():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=failure)
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     tool = mcp._tool_manager._tools["start_profiler"]
@@ -184,13 +189,14 @@ async def test_start_profiler_returns_core_failure_reason():
 async def test_purge_profiler_data_posts_to_purge():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"files": 12, "bytes": 48213})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     result = await mcp._tool_manager._tools["purge_profiler_data"].run({})
@@ -202,13 +208,14 @@ async def test_purge_profiler_data_posts_to_purge():
 async def test_get_reachability_forwards_targets():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.utils import register
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
     tool = mcp._tool_manager._tools["get_reachability"]
 
@@ -235,17 +242,18 @@ REACHABILITY = "https://localhost:31415/api/v1/utils/reachability"
 
 @pytest.fixture
 def reachability_tool(client):
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.utils import register
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, client)
     return mcp._tool_manager._tools["get_reachability"]
 
 
 @respx.mock
 async def test_get_reachability_unknown_namespace_raises(reachability_tool):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     from wlanpi_mcp.client.core_client import CoreAPIError
 
@@ -286,7 +294,7 @@ async def test_get_reachability_plain_text_no_gateway(
 
 @respx.mock
 async def test_get_reachability_other_503_raises(reachability_tool):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     from wlanpi_mcp.client.core_client import CoreAPIError
 

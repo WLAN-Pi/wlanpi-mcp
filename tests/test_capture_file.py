@@ -7,7 +7,8 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import EmbeddedResource
 
 from tests.test_capture_tools import (
@@ -22,7 +23,6 @@ from tests.test_capture_tools import (
     sessions_event,
     started_event,
 )
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import CaptureSocket
 from wlanpi_mcp.client.core_client import CoreAPIError
@@ -81,7 +81,7 @@ def capdir(monkeypatch, tmp_path):
 def _register():
     client = MagicMock()
     client.current_token = MagicMock(return_value="fake.jwt.token")
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     capture_file.register(mcp, client)
     return mcp._tool_manager._tools
 
@@ -245,7 +245,7 @@ async def test_fetch_without_identifier_or_path_is_an_error(capdir):
 
 
 async def test_fetch_via_real_dispatch_path_resolves_capture_id(capdir):
-    # Go through FastMCP's argument validation + dispatch (tool.run), not .fn —
+    # Go through MCPServer's argument validation + dispatch (tool.run), not .fn —
     # this is the path a real MCP client hits, where the earlier session_id
     # collision surfaced.
     _tmp, use = capdir
@@ -329,7 +329,7 @@ async def test_fetch_returns_a_pcapng_blob(capdir):
 
 
 async def test_fetch_sends_the_blob_once_without_structured_content(capdir):
-    # Issue #50: with structured output on, FastMCP also serialised the
+    # Issue #50: with structured output on, MCPServer also serialised the
     # EmbeddedResource into structuredContent, doubling the payload. Go through
     # the real conversion path and check only unstructured content comes back.
     tmp, _use = capdir
@@ -429,7 +429,7 @@ def _register_with_core(core_get):
     client = MagicMock()
     client.current_token = MagicMock(return_value="fake.jwt.token")
     client.get = core_get
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     capture_file.register(mcp, client)
     return mcp
 

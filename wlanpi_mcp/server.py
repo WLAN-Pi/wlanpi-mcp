@@ -1,6 +1,8 @@
 """Assemble the WLAN Pi MCP server and register all tools, resources, and prompts."""
 
-from wlanpi_mcp._compat import FastMCP, TransportSecuritySettings
+from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
+
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.prompts import diagnostics
 from wlanpi_mcp.resources import bluetooth as bt_res
@@ -28,9 +30,9 @@ from wlanpi_mcp.tools import (
 
 def create_server(
     client: CoreClient, host: str = "127.0.0.1", port: int = 8768
-) -> FastMCP:
+) -> MCPServer:
     """Create a WLAN Pi MCP server with all tools, resources, and prompts registered."""
-    mcp = FastMCP(
+    mcp = MCPServer(
         "WLAN Pi",
         instructions=(
             "WLAN Pi MCP server — exposes Wi-Fi network testing and analysis capabilities "
@@ -52,7 +54,7 @@ def create_server(
         stateless_http=True,
         json_response=True,
         # The daemon binds loopback-only behind nginx, which forwards the
-        # client's real Host header (e.g. 10.254.102.51:8767). FastMCP would
+        # client's real Host header (e.g. 10.254.102.51:8767). MCPServer would
         # otherwise auto-enable DNS rebinding protection for a loopback bind
         # and answer every /mcp request with 421 Misdirected Request. The
         # Bearer JWT gate in middleware/bearer_token.py is what protects the

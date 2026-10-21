@@ -36,11 +36,11 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import quote
 
+from mcp.server.mcpserver import MCPServer
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from wlanpi_mcp import download_links
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreAPIError, CoreClient
 from wlanpi_mcp.tools import hints
 
@@ -242,7 +242,7 @@ def _curl(pairs: list[tuple[str, str]]) -> str:
     return " ".join(parts)
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register get_profiler_reports and its download route."""
 
     @mcp.tool(annotations=hints.READ_ONLY)

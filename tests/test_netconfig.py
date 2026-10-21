@@ -1,7 +1,7 @@
 """
 Netconfig tools against the wlanpi-core 2.3.23 contract (namespace safety series).
 
-Run through tool.run (FastMCP's real validation + dispatch) with a real
+Run through tool.run (MCPServer's real validation + dispatch) with a real
 CoreClient and respx, so a core error is seen as the MCP client sees it.
 """
 
@@ -10,9 +10,9 @@ import json
 import httpx
 import pytest
 import respx
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreAPIError
 from wlanpi_mcp.resources import netconfig as netconfig_res
 from wlanpi_mcp.tools import netconfig
@@ -35,7 +35,7 @@ INVALID_OUTCOMES = {
 
 @pytest.fixture
 def tools(client):
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     netconfig.register(mcp, client)
     return mcp._tool_manager._tools
 
@@ -126,7 +126,7 @@ async def test_leftovers_resource(client):
     respx.get(f"{BASE}/leftovers").mock(
         return_value=httpx.Response(200, json={"left_alone": []})
     )
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     netconfig_res.register(mcp, client)
     contents = await mcp.read_resource("netconfig://leftovers")
     assert '"left_alone": []' in next(iter(contents)).content

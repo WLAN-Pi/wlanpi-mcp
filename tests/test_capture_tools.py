@@ -7,10 +7,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from mcp.server.mcpserver import MCPServer
 
 from tests.test_capture_dot11 import beacon, radiotap
 from tests.test_capture_pcapng import epb, idb, shb
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import CaptureSocket
 from wlanpi_mcp.client.core_client import CoreClient
@@ -153,7 +153,7 @@ def _register(client=None):
     if mock_client is None:
         mock_client = MagicMock()
         mock_client.current_token = MagicMock(return_value="fake.jwt.token")
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     capture_tools.register(mcp, mock_client)
     return mcp._tool_manager._tools, mock_client
 

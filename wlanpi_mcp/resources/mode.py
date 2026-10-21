@@ -3,14 +3,14 @@
 import json
 
 import httpx
+from mcp.server.mcpserver import MCPServer
 
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreClient
 
 VALID_MODES = {"classic", "wconsole", "hotspot", "wiperf", "server", "bridge"}
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register the device mode resource."""
 
     @mcp.resource("device://mode")

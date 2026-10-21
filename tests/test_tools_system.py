@@ -1,16 +1,16 @@
 import httpx
 import pytest
 import respx
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.tools import system
 
 CORE = "https://localhost:31415/api/v1/system"
 
 
 def _tools(client):
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     system.register(mcp, client)
     return mcp._tool_manager._tools
 

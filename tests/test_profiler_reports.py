@@ -13,9 +13,9 @@ from urllib.parse import unquote
 
 import httpx
 import pytest
+from mcp.server.mcpserver import MCPServer
 
 from wlanpi_mcp import download_links
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.client.core_client import CoreAPIError
 from wlanpi_mcp.tools import profiler_reports
 
@@ -122,7 +122,7 @@ def _clean_tickets():
 
 
 def _tool(core):
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     profiler_reports.register(mcp, core)
     return mcp._tool_manager._tools["get_profiler_reports"]
 
@@ -313,7 +313,7 @@ async def test_file_paths_are_quoted_into_the_core_url(core):
 
 @pytest.mark.parametrize("output", ["json", "links", "zip"])
 async def test_a_token_core_refuses_is_a_tool_error_with_core_detail(core, output):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     _write_client(core, MAC)
     core.get.side_effect = _core_error(401, "Invalid token")
@@ -336,7 +336,7 @@ async def test_an_older_core_without_the_endpoint_says_to_upgrade(core):
 
 
 async def test_a_core_error_on_a_file_is_not_swallowed(core):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     _write_client(core, MAC)
     core.get_bytes.side_effect = _core_error(500, "Internal Server Error")
@@ -499,7 +499,7 @@ async def test_an_oversized_request_is_refused_before_downloading(core, monkeypa
 
 
 async def test_invalid_output_is_rejected_by_the_schema(core):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     tool = _tool(core)
 

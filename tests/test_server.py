@@ -91,7 +91,7 @@ async def _serve(mcp, *, with_middleware: bool = True):
 
 
 def test_dns_rebinding_protection_is_off_for_loopback_bind(mcp):
-    # FastMCP flips this on automatically for host=127.0.0.1; the nginx front
+    # MCPServer flips this on automatically for host=127.0.0.1; the nginx front
     # forwards LAN Host headers, so it must stay off (the Bearer gate is the
     # protection).
     security = mcp.settings.transport_security
