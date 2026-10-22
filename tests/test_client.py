@@ -2,7 +2,12 @@ import httpx
 import pytest
 import respx
 
-from wlanpi_mcp.client.core_client import CoreAPIError, CoreClient
+from wlanpi_mcp.client.core_client import (
+    CoreAPIError,
+    CoreBadResponseError,
+    CoreClient,
+    CoreUnavailableError,
+)
 
 
 @respx.mock
@@ -124,3 +129,26 @@ async def test_get_bytes_raises_core_api_error(client):
         await client.get_bytes("/api/v1/profiler/files/gone")
     assert exc.value.status_code == 404
     assert exc.value.detail == "Profiler file not found"
+
+
+@respx.mock
+async def test_non_json_2xx_raises_bad_response_error(client):
+    respx.get("https://localhost:31415/api/v1/x").mock(
+        return_value=httpx.Response(
+            200, text="<html>hi</html>", headers={"content-type": "text/html"}
+        )
+    )
+    with pytest.raises(CoreBadResponseError, match="not JSON") as info:
+        await client.get("/api/v1/x")
+    assert isinstance(info.value, ValueError)
+
+
+@respx.mock
+async def test_read_timeout_says_core_did_not_answer(client):
+    respx.get("https://localhost:31415/api/v1/x").mock(
+        side_effect=httpx.ReadTimeout("")
+    )
+    with pytest.raises(CoreUnavailableError) as info:
+        await client.get("/api/v1/x")
+    assert "did not answer in time (ReadTimeout)" in str(info.value)
+    assert isinstance(info.value, httpx.TransportError)

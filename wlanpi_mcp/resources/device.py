@@ -3,7 +3,8 @@
 import time
 from typing import Any
 
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
+
 from wlanpi_mcp.client.core_client import CoreClient
 
 _cache: dict[str, tuple[Any, float]] = {}
@@ -20,7 +21,7 @@ async def _cached_get(client: CoreClient, path: str, ttl: float) -> Any:
     return data
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register the device info and stats resources."""
 
     @mcp.resource("device://info")

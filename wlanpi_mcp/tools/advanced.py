@@ -3,14 +3,15 @@
 import re
 from typing import Any
 
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
+
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.tools import hints
 
 VALID_MODES = {"classic", "wconsole", "hotspot", "wiperf", "server", "bridge"}
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register the advanced system control tools."""
 
     @mcp.tool(annotations=hints.READ_ONLY)

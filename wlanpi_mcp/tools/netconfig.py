@@ -2,7 +2,8 @@
 
 from typing import Any, NotRequired, TypedDict
 
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
+
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.tools import hints
 
@@ -27,7 +28,7 @@ class NetConfigUpdate(TypedDict, total=False):
     roots: list[dict[str, Any]] | None
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register the network configuration management tools."""
 
     @mcp.tool(annotations=hints.READ_ONLY)

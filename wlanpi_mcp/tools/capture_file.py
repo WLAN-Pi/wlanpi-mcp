@@ -29,14 +29,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import BlobResourceContents, EmbeddedResource
-from pydantic import AnyUrl
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
 from wlanpi_mcp import download_links
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import (
     CaptureError,
@@ -247,7 +246,7 @@ def _capture_for_path(resolved: str) -> FileCapture | None:
     return None
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register the non-streaming, file-backed capture tools."""
 
     @mcp.tool(annotations=hints.ADDITIVE)
@@ -459,7 +458,7 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         captures.extend(_disk_captures())
         return {"captures": captures, "count": len(captures)}
 
-    # structured_output=False: with structured output on, FastMCP serialises the
+    # structured_output=False: with structured output on, MCPServer serialises the
     # returned EmbeddedResource into structuredContent as well as content, so
     # the base64 pcap goes over the wire twice (issue #50). Errors are raised as
     # ToolError (isError: true) rather than returned as dicts, so the result is
@@ -531,8 +530,8 @@ def register(mcp: FastMCP, client: CoreClient) -> None:
         return EmbeddedResource(
             type="resource",
             resource=BlobResourceContents(
-                uri=AnyUrl(f"file://{resolved}"),
-                mimeType=PCAP_MIME,
+                uri=f"file://{resolved}",
+                mime_type=PCAP_MIME,
                 blob=blob,
             ),
         )

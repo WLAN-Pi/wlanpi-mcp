@@ -12,8 +12,7 @@ safe base URL from the request that asked for it.
 
 import re
 
-from mcp.server.lowlevel.server import request_ctx
-
+from wlanpi_mcp.auth.token_context import current_request
 from wlanpi_mcp.client.core_client import CoreAPIError, CoreClient
 
 #: How long a download ticket stays valid, in seconds. Single use either way.
@@ -37,12 +36,10 @@ async def check_token(client: CoreClient) -> str | None:
     """
     try:
         await client.get("/api/v1/system/device/info")
-    except CoreAPIError as exc:
-        if exc.status_code in (401, 403):
+    except Exception as exc:  # noqa: BLE001 - surfaced to the caller
+        if isinstance(exc, CoreAPIError) and exc.status_code in (401, 403):
             return f"wlanpi-core refused this token: {exc}"
         return f"could not check the token with wlanpi-core: {exc}"
-    except Exception as exc:  # noqa: BLE001 - surfaced to the caller
-        return f"could not reach wlanpi-core to check the token: {exc}"
     return None
 
 
@@ -55,11 +52,7 @@ def request_base_url() -> str | None:
     https://wlanpi-9be.local:8767). None outside an HTTP request (stdio), or
     when the Host header is not a plain host[:port].
     """
-    try:
-        ctx = request_ctx.get()
-    except LookupError:
-        return None
-    request = getattr(ctx, "request", None)
+    request = current_request.get()
     if request is None:
         return None
     headers = request.headers

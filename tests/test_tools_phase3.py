@@ -1,8 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 # ── Advanced (mode, regulatory, battery) ─────────────────────────────────────
 
@@ -13,7 +12,7 @@ async def test_get_device_mode_uses_api():
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"mode": "hotspot", "model": "R4"})
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     advanced.register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["get_device_mode"].fn
@@ -30,7 +29,7 @@ async def test_get_device_mode_flags_unknown_mode():
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"mode": "bogus"})
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     advanced.register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["get_device_mode"].fn
@@ -48,7 +47,7 @@ async def test_get_battery_status_uses_api():
     mock_client.get = AsyncMock(
         return_value={"present": True, "capacity_percent": 78, "status": "Discharging"}
     )
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     advanced.register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["get_battery_status"].fn
@@ -67,7 +66,7 @@ async def test_get_regulatory_domain_uses_api():
     mock_client.get = AsyncMock(
         return_value={"country": "US", "raw": "country US: DFS-FCC"}
     )
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     advanced.register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["get_regulatory_domain"].fn
@@ -82,7 +81,7 @@ async def test_set_regulatory_domain_validates_code():
     from wlanpi_mcp.tools import advanced
 
     mock_client = MagicMock()
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     advanced.register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["set_regulatory_domain"].fn
@@ -96,7 +95,7 @@ async def test_set_regulatory_domain_accepts_valid_code():
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"country": "US"})
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     advanced.register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["set_regulatory_domain"].fn

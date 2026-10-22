@@ -7,8 +7,9 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
-from mcp.types import EmbeddedResource
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import CallToolResult, EmbeddedResource
 
 from tests.test_capture_tools import (
     AUTH_OK,
@@ -22,7 +23,6 @@ from tests.test_capture_tools import (
     sessions_event,
     started_event,
 )
-from wlanpi_mcp._compat import FastMCP
 from wlanpi_mcp.capture import storage
 from wlanpi_mcp.capture.ws_client import CaptureSocket
 from wlanpi_mcp.client.core_client import CoreAPIError
@@ -81,7 +81,7 @@ def capdir(monkeypatch, tmp_path):
 def _register():
     client = MagicMock()
     client.current_token = MagicMock(return_value="fake.jwt.token")
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     capture_file.register(mcp, client)
     return mcp._tool_manager._tools
 
@@ -241,11 +241,11 @@ async def test_fetch_without_identifier_or_path_is_an_error(capdir):
     _tmp, _use = capdir
     tools = _register()
     with pytest.raises(ToolError, match="pass capture_id or path"):
-        await tools["fetch_pcap_file"].run({})
+        await tools["fetch_pcap_file"].run({}, Context())
 
 
 async def test_fetch_via_real_dispatch_path_resolves_capture_id(capdir):
-    # Go through FastMCP's argument validation + dispatch (tool.run), not .fn —
+    # Go through MCPServer's argument validation + dispatch (tool.run), not .fn:
     # this is the path a real MCP client hits, where the earlier session_id
     # collision surfaced.
     _tmp, use = capdir
@@ -269,7 +269,7 @@ async def test_fetch_via_real_dispatch_path_resolves_capture_id(capdir):
     by_alias = await tools["fetch_pcap_file"].fn(session_id="cap_run_path")
     for result in (by_capture_id, by_alias):
         assert isinstance(result, EmbeddedResource)
-        assert result.resource.mimeType == "application/vnd.tcpdump.pcapng"
+        assert result.resource.mime_type == "application/vnd.tcpdump.pcapng"
 
 
 # ── list_pcap_files ──────────────────────────────────────────────────────────
@@ -320,7 +320,7 @@ async def test_fetch_returns_a_pcapng_blob(capdir):
 
     fetched = await tools["fetch_pcap_file"].fn(capture_id="cap_fetch")
     assert isinstance(fetched, EmbeddedResource)
-    assert fetched.resource.mimeType == "application/vnd.tcpdump.pcapng"
+    assert fetched.resource.mime_type == "application/vnd.tcpdump.pcapng"
     assert base64.b64decode(fetched.resource.blob) == Path(entry.path).read_bytes()
     # The deprecated session_id alias still resolves the same capture.
     via_alias = await tools["fetch_pcap_file"].fn(session_id="cap_fetch")
@@ -329,7 +329,7 @@ async def test_fetch_returns_a_pcapng_blob(capdir):
 
 
 async def test_fetch_sends_the_blob_once_without_structured_content(capdir):
-    # Issue #50: with structured output on, FastMCP also serialised the
+    # Issue #50: with structured output on, MCPServer also serialised the
     # EmbeddedResource into structuredContent, doubling the payload. Go through
     # the real conversion path and check only unstructured content comes back.
     tmp, _use = capdir
@@ -339,10 +339,13 @@ async def test_fetch_sends_the_blob_once_without_structured_content(capdir):
     tool = tools["fetch_pcap_file"]
 
     assert tool.output_schema is None
-    converted = await tool.run({"capture_id": "cap_once"}, convert_result=True)
-    # Structured tools return (content, structured); unstructured return content.
-    assert isinstance(converted, list) and len(converted) == 1
-    (item,) = converted
+    converted = await tool.run(
+        {"capture_id": "cap_once"}, Context(), convert_result=True
+    )
+    assert isinstance(converted, CallToolResult)
+    assert converted.structured_content is None
+    assert len(converted.content) == 1
+    (item,) = converted.content
     assert isinstance(item, EmbeddedResource)
     assert base64.b64decode(item.resource.blob) == target.read_bytes()
 
@@ -351,14 +354,14 @@ async def test_fetch_unknown_session_is_an_error(capdir):
     _tmp, _use = capdir
     tools = _register()
     with pytest.raises(ToolError, match="no capture file"):
-        await tools["fetch_pcap_file"].run({"session_id": "ghost"})
+        await tools["fetch_pcap_file"].run({"session_id": "ghost"}, Context())
 
 
 async def test_fetch_refuses_a_path_outside_the_capture_dir(capdir):
     _tmp, _use = capdir
     tools = _register()
     with pytest.raises(ToolError, match="outside"):
-        await tools["fetch_pcap_file"].run({"path": "/etc/passwd"})
+        await tools["fetch_pcap_file"].run({"path": "/etc/passwd"}, Context())
 
 
 async def test_fetch_by_path_within_the_capture_dir_works(capdir):
@@ -429,7 +432,7 @@ def _register_with_core(core_get):
     client = MagicMock()
     client.current_token = MagicMock(return_value="fake.jwt.token")
     client.get = core_get
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     capture_file.register(mcp, client)
     return mcp
 
@@ -447,14 +450,16 @@ async def _ok(*_args, **_kwargs):
 
 async def test_download_link_needs_an_identifier(capdir):
     tools = _register_with_core(_ok)._tool_manager._tools
-    result = await tools["get_pcap_download_url"].run({})
+    result = await tools["get_pcap_download_url"].run({}, Context())
     assert result == {"error": "pass capture_id or path"}
     assert capture_file._TICKETS == {}
 
 
 async def test_download_link_refuses_a_path_outside_the_capture_dir(capdir):
     tools = _register_with_core(_ok)._tool_manager._tools
-    result = await tools["get_pcap_download_url"].run({"path": "/etc/passwd"})
+    result = await tools["get_pcap_download_url"].run(
+        {"path": "/etc/passwd"}, Context()
+    )
     assert "outside the managed capture directory" in result["error"]
     assert capture_file._TICKETS == {}
 
@@ -468,7 +473,9 @@ async def test_download_link_is_not_minted_when_core_rejects_the_token(capdir):
         raise _core_error(401, "Invalid token")
 
     tools = _register_with_core(refuse)._tool_manager._tools
-    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_abc"})
+    result = await tools["get_pcap_download_url"].run(
+        {"capture_id": "cap_abc"}, Context()
+    )
     assert "refused this token" in result["error"]
     assert "Invalid token" in result["error"]
     assert capture_file._TICKETS == {}
@@ -485,7 +492,7 @@ def _core_error(status, detail):
     ("failure", "expected"),
     [
         (_core_error(500, "boom"), "could not check the token with wlanpi-core"),
-        (httpx.ConnectError("refused"), "could not reach wlanpi-core"),
+        (httpx.ConnectError("refused"), "could not check the token with wlanpi-core"),
     ],
 )
 async def test_download_link_does_not_blame_the_token_for_core_failures(
@@ -500,7 +507,9 @@ async def test_download_link_does_not_blame_the_token_for_core_failures(
         raise failure
 
     tools = _register_with_core(fail)._tool_manager._tools
-    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_abc"})
+    result = await tools["get_pcap_download_url"].run(
+        {"capture_id": "cap_abc"}, Context()
+    )
     assert result["error"].startswith(expected)
     assert "refused this token" not in result["error"]
     assert capture_file._TICKETS == {}
@@ -514,7 +523,9 @@ async def test_download_link_without_http_context_returns_path_size_and_hash(cap
     pcap = tmp_path / "capture-20261003T120000-cap_abc.pcapng"
     pcap.write_bytes(data)
     tools = _register_with_core(_ok)._tool_manager._tools
-    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_abc"})
+    result = await tools["get_pcap_download_url"].run(
+        {"capture_id": "cap_abc"}, Context()
+    )
     assert result["capture_id"] == "cap_abc"
     assert result["filename"] == pcap.name
     assert result["size_bytes"] == len(data)
@@ -545,7 +556,9 @@ async def test_download_link_warns_while_the_capture_is_running(capdir):
     )
     assert start["status"] == "running"
     await asyncio.sleep(0.05)  # let the background task write the first bytes
-    result = await tools["get_pcap_download_url"].run({"capture_id": "cap_run"})
+    result = await tools["get_pcap_download_url"].run(
+        {"capture_id": "cap_run"}, Context()
+    )
     assert result["status"] == "running"
     assert "partial" in result["warning"]
 
@@ -564,7 +577,9 @@ async def test_download_link_warns_when_a_running_capture_is_named_by_path(capdi
     )
     try:
         tools = _register_with_core(_ok)._tool_manager._tools
-        result = await tools["get_pcap_download_url"].run({"path": str(pcap)})
+        result = await tools["get_pcap_download_url"].run(
+            {"path": str(pcap)}, Context()
+        )
     finally:
         capture_file._CAPTURES.pop("cap_live", None)
     assert result["status"] == "running"

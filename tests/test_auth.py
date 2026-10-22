@@ -2,14 +2,12 @@ import hashlib
 
 import httpx
 import pytest
-from mcp.server.lowlevel.server import request_ctx
-from mcp.shared.context import RequestContext
 from starlette.applications import Starlette
-from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from wlanpi_mcp.auth.token_context import current_token, get_token
+from wlanpi_mcp.auth.token_context import current_request, current_token, get_token
+from wlanpi_mcp.download_links import request_base_url
 from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
 
 
@@ -73,62 +71,29 @@ async def test_publishes_token_fingerprint_principal(http):
     assert response.json()["client_id"] == expected
 
 
-# --- get_token(): the MCP request context is the primary source -------------
-#
-# The streamable HTTP transport binds the Starlette request to every MCP call
-# and the server exposes it via request_ctx while a handler runs. Tool calls
-# run in a task the session manager spawns, so the header on that request,
-# not the middleware's contextvar, is the authoritative token for the call.
-
-
-def _bind_request(authorization: str | None):
-    headers = []
-    if authorization is not None:
-        headers.append((b"authorization", authorization.encode()))
-    request = Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "path": "/mcp",
-            "headers": headers,
-            "query_string": b"",
-        }
-    )
-    ctx = RequestContext(
-        request_id=1, meta=None, session=None, lifespan_context=None, request=request
-    )
-    return request_ctx.set(ctx)
-
-
-def test_get_token_reads_bearer_from_request_context():
-    reset = _bind_request("Bearer core.jwt.fromreq")
-    try:
-        assert get_token() == "core.jwt.fromreq"
-    finally:
-        request_ctx.reset(reset)
-
-
-def test_request_context_wins_over_inherited_contextvar():
-    # A stale inherited contextvar must never outrank the header that carried
-    # the call being handled.
-    ctx = current_token.set("core.jwt.inherited")
-    reset = _bind_request("Bearer core.jwt.fromreq")
-    try:
-        assert get_token() == "core.jwt.fromreq"
-    finally:
-        request_ctx.reset(reset)
-        current_token.reset(ctx)
-
-
-def test_get_token_falls_back_to_contextvar_without_bearer_on_request():
-    ctx = current_token.set("core.jwt.inherited")
-    reset = _bind_request(None)
-    try:
-        assert get_token() == "core.jwt.inherited"
-    finally:
-        request_ctx.reset(reset)
-        current_token.reset(ctx)
+# --- get_token() and request_base_url() read what the middleware set -------
 
 
 def test_get_token_is_none_outside_any_request():
     assert get_token() is None
+
+
+async def _echo_base_url(request):
+    return JSONResponse({"base_url": request_base_url()})
+
+
+async def test_middleware_current_request_reaches_request_base_url():
+    app = Starlette(routes=[Route("/probe", _echo_base_url)])
+    app.add_middleware(BearerTokenMiddleware)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+        response = await http.get(
+            "/probe",
+            headers={
+                "Authorization": "Bearer t",
+                "Host": "wlanpi-9be.local:8767",
+                "X-Forwarded-Proto": "https",
+            },
+        )
+    assert response.json() == {"base_url": "https://wlanpi-9be.local:8767"}
+    assert current_request.get() is None

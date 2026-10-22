@@ -2,11 +2,12 @@
 
 import json
 
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
+
 from wlanpi_mcp.client.core_client import CoreClient
 
 
-def register(mcp: FastMCP, client: CoreClient) -> None:
+def register(mcp: MCPServer, client: CoreClient) -> None:
     """Register the service status resource."""
 
     @mcp.resource("services://status/{name}")

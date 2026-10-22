@@ -1,6 +1,7 @@
 import httpx
 import pytest
 import respx
+from mcp.server.mcpserver import Context
 
 # ── WLAN ─────────────────────────────────────────────────────────────────────
 
@@ -10,13 +11,14 @@ import respx
 async def test_scan_wlan_uses_canonical_endpoint():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.wlan import register
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={"nets": []})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["scan_wlan"].fn
@@ -38,10 +40,11 @@ def test_deprecated_wlan_tools_removed():
     """
     from unittest.mock import MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.wlan import register
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, MagicMock())
 
     tools = mcp._tool_manager._tools
@@ -108,13 +111,14 @@ async def test_get_profiler_status(client):
 async def test_start_profiler_builds_minimal_body():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"success": True})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     tool_fn = mcp._tool_manager._tools["start_profiler"].fn
@@ -129,13 +133,14 @@ async def test_start_profiler_builds_minimal_body():
 async def test_start_profiler_forwards_newer_flags():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"success": True})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     await mcp._tool_manager._tools["start_profiler"].run(
@@ -144,7 +149,8 @@ async def test_start_profiler_forwards_newer_flags():
             "noprofilertlv": True,
             "oui_update": False,
             "no_bpf_filters": True,
-        }
+        },
+        Context(),
     )
 
     assert mock_client.post.call_args.kwargs["json"] == {
@@ -158,7 +164,8 @@ async def test_start_profiler_forwards_newer_flags():
 async def test_start_profiler_returns_core_failure_reason():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     failure = {
@@ -169,11 +176,11 @@ async def test_start_profiler_returns_core_failure_reason():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=failure)
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
     tool = mcp._tool_manager._tools["start_profiler"]
-    result = await tool.run({"interface": "wlan0"})
+    result = await tool.run({"interface": "wlan0"}, Context())
 
     assert result == failure
     # The tool description tells the client how to read the result.
@@ -184,16 +191,17 @@ async def test_start_profiler_returns_core_failure_reason():
 async def test_purge_profiler_data_posts_to_purge():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.profiler import register
 
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value={"files": 12, "bytes": 48213})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
 
-    result = await mcp._tool_manager._tools["purge_profiler_data"].run({})
+    result = await mcp._tool_manager._tools["purge_profiler_data"].run({}, Context())
 
     mock_client.post.assert_awaited_once_with("/api/v1/profiler/purge")
     assert result == {"files": 12, "bytes": 48213}
@@ -202,31 +210,32 @@ async def test_purge_profiler_data_posts_to_purge():
 async def test_get_reachability_forwards_targets():
     from unittest.mock import AsyncMock, MagicMock
 
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.utils import register
 
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={})
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, mock_client)
     tool = mcp._tool_manager._tools["get_reachability"]
 
-    await tool.run({"targets": ["8.8.8.8", "1.1.1.1"]})
+    await tool.run({"targets": ["8.8.8.8", "1.1.1.1"]}, Context())
     assert mock_client.get.call_args.kwargs["params"] == {
         "targets": ["8.8.8.8", "1.1.1.1"]
     }
 
-    await tool.run({"namespace": "ns_a"})
+    await tool.run({"namespace": "ns_a"}, Context())
     assert mock_client.get.call_args.kwargs["params"] == {"namespace": "ns_a"}
 
-    await tool.run({"targets": ["8.8.8.8"], "namespace": "ns_a"})
+    await tool.run({"targets": ["8.8.8.8"], "namespace": "ns_a"}, Context())
     assert mock_client.get.call_args.kwargs["params"] == {
         "targets": ["8.8.8.8"],
         "namespace": "ns_a",
     }
 
-    await tool.run({})
+    await tool.run({}, Context())
     assert mock_client.get.call_args.kwargs["params"] is None
 
 
@@ -235,17 +244,18 @@ REACHABILITY = "https://localhost:31415/api/v1/utils/reachability"
 
 @pytest.fixture
 def reachability_tool(client):
-    from wlanpi_mcp._compat import FastMCP
+    from mcp.server.mcpserver import MCPServer
+
     from wlanpi_mcp.tools.utils import register
 
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp, client)
     return mcp._tool_manager._tools["get_reachability"]
 
 
 @respx.mock
 async def test_get_reachability_unknown_namespace_raises(reachability_tool):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     from wlanpi_mcp.client.core_client import CoreAPIError
 
@@ -253,7 +263,7 @@ async def test_get_reachability_unknown_namespace_raises(reachability_tool):
         return_value=httpx.Response(400, json={"error": "unknown namespace: ns_x"})
     )
     with pytest.raises(ToolError) as exc:
-        await reachability_tool.run({"namespace": "ns_x"})
+        await reachability_tool.run({"namespace": "ns_x"}, Context())
     cause = exc.value.__cause__
     assert isinstance(cause, CoreAPIError)
     assert cause.status_code == 400
@@ -266,7 +276,7 @@ async def test_get_reachability_no_gateway_is_returned(reachability_tool):
     respx.get(REACHABILITY).mock(
         return_value=httpx.Response(503, json={"error": "No default gateway found"})
     )
-    result = await reachability_tool.run({"namespace": "ns_a"})
+    result = await reachability_tool.run({"namespace": "ns_a"}, Context())
     assert result == {"error": "No default gateway found", "namespace": "ns_a"}
 
 
@@ -280,13 +290,13 @@ async def test_get_reachability_plain_text_no_gateway(
     respx.get(REACHABILITY).mock(
         return_value=httpx.Response(503, text="No default gateway")
     )
-    result = await reachability_tool.run(args)
+    result = await reachability_tool.run(args, Context())
     assert result == {"error": "No default gateway", "namespace": expected_ns}
 
 
 @respx.mock
 async def test_get_reachability_other_503_raises(reachability_tool):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from mcp.server.mcpserver.exceptions import ToolError
 
     from wlanpi_mcp.client.core_client import CoreAPIError
 
@@ -294,7 +304,7 @@ async def test_get_reachability_other_503_raises(reachability_tool):
         return_value=httpx.Response(503, json={"error": "Reachability check failed"})
     )
     with pytest.raises(ToolError) as exc:
-        await reachability_tool.run({})
+        await reachability_tool.run({}, Context())
     cause = exc.value.__cause__
     assert isinstance(cause, CoreAPIError)
     assert cause.status_code == 503

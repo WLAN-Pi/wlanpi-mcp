@@ -5,15 +5,14 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 import respx
-
-from wlanpi_mcp._compat import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 
 def _register(module):
     mock_client = MagicMock()
     mock_client.get = AsyncMock(return_value={})
     mock_client.post = AsyncMock(return_value={})
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     module.register(mcp, mock_client)
     return mcp._tool_manager._tools, mock_client
 
