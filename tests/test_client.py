@@ -13,15 +13,7 @@ async def test_get_passes_client_token_through(client, bearer_token):
     await client.get("/api/v1/system/device/info")
     assert route.called
     assert route.calls[0].request.headers["Authorization"] == f"Bearer {bearer_token}"
-
-
-@respx.mock
-async def test_tags_requests_for_nginx_jwt_routing(client):
-    route = respx.get("https://localhost:31415/api/v1/system/device/info").mock(
-        return_value=httpx.Response(200, json={"ok": True})
-    )
-    await client.get("/api/v1/system/device/info")
-    assert route.calls[0].request.headers["X-Wlanpi-Client"] == "mcp"
+    assert "X-Wlanpi-Client" not in route.calls[0].request.headers
 
 
 @respx.mock

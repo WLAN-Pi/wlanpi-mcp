@@ -50,7 +50,7 @@ Use the `access_token` value as your Bearer token in the client configs below. T
 
 Alternatively, call `POST /api/v1/auth/token` yourself - see the wlanpi-core API docs (Swagger UI at `https://<wlanpi>:31415/docs`) for the HMAC signing details.
 
-The full flow, including the nginx `X-Real-IP` handling that makes on-box calls take core's JWT validation path, is documented in [docs/auth-flow.md](docs/auth-flow.md).
+The full flow, from the MCP client through nginx to wlanpi-core, is documented in [docs/auth-flow.md](docs/auth-flow.md).
 
 ## Connecting Claude Code
 
