@@ -43,7 +43,7 @@ The packaged unit runs as `wlanpi`, with `EnvironmentFile=/etc/wlanpi-mcp/config
 
 The process runs on the device. It can reboot the box, change network config, and capture Wi-Fi. It does not authenticate callers itself.
 
-- Flag new authentication, token minting, verification, refresh, or a token cache. Clients present a wlanpi-core JWT (`Authorization: Bearer`). `CoreClient` forwards that token plus `X-Wlanpi-Client: mcp`. A 401 goes back to the client with no retry.
+- Flag new authentication, token minting, verification, refresh, or a token cache. Clients present a wlanpi-core JWT (`Authorization: Bearer`). `CoreClient` forwards that token. A 401 goes back to the client with no retry.
 - Flag `WLANPI_CORE_TOKEN` consulted when the request already has a Bearer token, written into a log, or required for the HTTP daemon. It is the stdio fallback only and stays empty in the packaged `config.env`.
 - Flag a token in a URL, query string, WebSocket URL, log line, or error string. The capture socket sends it only as the first message, `{"command":"auth","token":...}`.
 - Flag a route that skips `BearerTokenMiddleware` and is not under `/pcap/` or `/profiler-report/`. Those prefixes exist for single-use download tickets. A new ticket route checks the ticket itself, is listed in `TICKET_PATH_PREFIXES`, and has a `tests/test_server.py` case: served once without a JWT, second fetch 404, expired ticket refused, `/mcp` still 401.

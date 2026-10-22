@@ -97,15 +97,7 @@ class CoreClient:
     (captured by BearerTokenMiddleware, or WLANPI_CORE_TOKEN for stdio mode)
     is forwarded as the Bearer token on every request. wlanpi-core validates
     it — this server never mints or verifies tokens itself.
-
-    Every request is tagged 'X-Wlanpi-Client: mcp' so core's nginx routes it to
-    the JWT validator even when we call over loopback. Without the tag, on-box
-    (localhost) requests are forced onto core's HMAC path, which needs a
-    root-owned shared secret this unprivileged service cannot read.
     """
-
-    #: Tag read by core's nginx to route on-box calls to the JWT auth path.
-    CLIENT_TAG = "mcp"
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -185,7 +177,6 @@ class CoreClient:
         headers = {
             **kwargs.get("headers", {}),
             "Authorization": f"Bearer {self._current_token()}",
-            "X-Wlanpi-Client": self.CLIENT_TAG,
         }
         try:
             response = await self._http.request(
