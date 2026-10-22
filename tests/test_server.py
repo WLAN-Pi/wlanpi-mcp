@@ -10,6 +10,7 @@ import respx
 
 from wlanpi_mcp.client.core_client import CoreClient
 from wlanpi_mcp.middleware.bearer_token import BearerTokenMiddleware
+from wlanpi_mcp.resources import device as device_resources
 from wlanpi_mcp.server import create_http_app, create_server
 
 # What the daemon sees through the nginx front: the client's real Host and
@@ -256,6 +257,51 @@ async def test_unreachable_core_reaches_the_client(mcp):
     assert "wlanpi-core unreachable" in text and "Connection refused" in text, text
 
 
+def _read_resource(uri: str, request_id: int = 2) -> dict:
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": "resources/read",
+        "params": {"uri": uri},
+    }
+
+
+@pytest.mark.parametrize(
+    ("core_response", "expected"),
+    [
+        (
+            httpx.Response(401, json={"detail": "Invalid token"}),
+            ["401", "Invalid token"],
+        ),
+        (
+            httpx.ConnectError("[Errno 111] Connection refused"),
+            ["wlanpi-core unreachable", "Connection refused"],
+        ),
+    ],
+)
+@respx.mock
+async def test_core_error_reaches_a_resource_read(
+    mcp, monkeypatch, core_response, expected
+):
+    # mcp 2.x withholds the message of anything but a ResourceError from a
+    # resources/read, so the core error classes are ResourceErrors too.
+    monkeypatch.setattr(device_resources, "_cache", {})
+    route = respx.get(DEVICE_INFO_URL)
+    if isinstance(core_response, Exception):
+        route.mock(side_effect=core_response)
+    else:
+        route.mock(return_value=core_response)
+    async with _serve(mcp) as http:
+        reply = await http.post(
+            "/mcp",
+            json=_read_resource("device://info"),
+            headers={"Authorization": "Bearer t", **MCP_HEADERS},
+        )
+    message = reply.json()["error"]["message"]
+    for part in expected:
+        assert part in message, message
+
+
 @pytest.mark.parametrize(
     ("status", "body", "expected"),
     [
@@ -459,7 +505,7 @@ def test_ticket_download_routes_are_the_only_routes_without_a_jwt(mcp):
 
     exempt = sorted(
         route.path
-        for route in mcp.streamable_http_app().routes
+        for route in create_http_app(mcp).routes
         if route.path.startswith(TICKET_PATH_PREFIXES)
     )
     assert exempt == sorted(

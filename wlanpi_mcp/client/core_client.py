@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ResourceError, ToolError
 
 from wlanpi_mcp.auth.token_context import get_token
 from wlanpi_mcp.config import Settings
@@ -20,7 +20,7 @@ _client: Optional["CoreClient"] = None
 _MAX_TEXT_DETAIL = 500
 
 
-class CoreAPIError(httpx.HTTPStatusError, ToolError):
+class CoreAPIError(httpx.HTTPStatusError, ToolError, ResourceError):
     """
     A non-2xx response from wlanpi-core, with core's error detail intact.
 
@@ -46,20 +46,21 @@ class CoreAPIError(httpx.HTTPStatusError, ToolError):
         )
 
 
-# The error classes below are ToolErrors on top of their httpx/stdlib base:
-# mcp 2.1+ reports any other exception from a tool as a bare "Error executing
-# tool X", dropping the message, while the base keeps existing handlers valid.
+# The error classes below are ToolErrors and ResourceErrors on top of their
+# httpx/stdlib base: mcp 2.1+ reports any other exception from a tool as a bare
+# "Error executing tool X" (and from a resource as "Error reading resource
+# <uri>"), dropping the message, while the base keeps existing handlers valid.
 
 
-class MissingTokenError(RuntimeError, ToolError):
+class MissingTokenError(RuntimeError, ToolError, ResourceError):
     """No wlanpi-core token is available."""
 
 
-class CoreUnavailableError(httpx.TransportError, ToolError):
+class CoreUnavailableError(httpx.TransportError, ToolError, ResourceError):
     """wlanpi-core could not be reached or did not answer in time."""
 
 
-class CoreBadResponseError(ValueError, ToolError):
+class CoreBadResponseError(ValueError, ToolError, ResourceError):
     """wlanpi-core answered 2xx with a body that is not JSON."""
 
 
