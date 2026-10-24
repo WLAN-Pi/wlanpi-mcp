@@ -17,12 +17,14 @@ Review rules for wlanpi-mcp. This is an on-device MCP server and a thin bridge t
 
 ## Debian packaging and versions
 
-A changelog bump on `main` is a release. `deploy-to-packagecloud.yml` builds and publishes when `debian/changelog` changes, and fails if `wlanpi_mcp/__version__.py` differs from the changelog version minus the Debian revision (`0.7.0` matches `0.7.0-1`).
+Only a release pull request edits `debian/changelog` or `wlanpi_mcp/__version__.py`. A fix or a feature pull request leaves both unchanged. Do not add a Debian revision `-N`. Follow [Land a Fix and Cut a Release](https://github.com/WLAN-Pi/developers/blob/main/RELEASING.md).
 
-- Flag a behavior, packaging, or install-path change with no `debian/changelog` entry.
-- Flag a changelog bump on a docs-only or CI-only change.
-- Flag `__version__` diverging from the changelog upstream version (the part before `-N`).
-- Flag a new call to a wlanpi-core route that needs core newer than `Depends: wlanpi-core (>= 2.4.8)` unless `debian/control` raises that floor and the changelog says so. Where older core is still possible, a 404 becomes an upgrade message, as `get_profiler_reports` does.
+Today, `deploy-to-packagecloud.yml` builds and publishes to Packagecloud `wlanpi/dev` when `debian/changelog` changes on `main`. It fails if `wlanpi_mcp/__version__.py` differs from the changelog `major.minor.patch` (`0.7.0` matches `0.7.0-1`). The dev-build stamp is planned. It is not live yet. When it is, CI writes `X.Y.Z~dev<YYYYMMDD>.<run_id>.<run_attempt>+g<sha>` in the build workspace, uploads that `.deb` to Packagecloud `wlanpi/dev`, and does not tag it. Under that same CI, the release pull request uploads to `wlanpi/main` and tags `v<version>`.
+
+- Flag a pull request that edits `debian/changelog` or `wlanpi_mcp/__version__.py` unless that pull request is the release. A fix or a feature is not a release.
+- Flag a pull request that sets the newest changelog version to one that contains a Debian revision `-N`.
+- Flag a release pull request where `wlanpi_mcp/__version__.py` differs from the changelog `major.minor.patch`.
+- Flag a new call to a wlanpi-core route that needs core newer than `Depends: wlanpi-core (>= 2.4.8)` unless `debian/control` raises that floor. The release pull request records the new floor. Where older core is still possible, a 404 becomes an upgrade message, as `get_profiler_reports` does.
 - Flag `debian/rules` building with anything other than `SNAKE ?= /usr/bin/python3.13`, dropping `--no-compile` or the bytecode cleanup, or installing outside `/opt/wlanpi-mcp`.
 - Flag a new `debian/compat`. Compatibility is `debhelper-compat (= 13)` in `debian/control`.
 - Flag an `Architecture` change with no stated reason. This package is `any` because dh-virtualenv ships arch-specific wheels.
