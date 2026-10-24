@@ -17,7 +17,7 @@ Review rules for wlanpi-mcp. This is an on-device MCP server and a thin bridge t
 
 ## Debian packaging and versions
 
-Only a release pull request edits `debian/changelog` or `wlanpi_mcp/__version__.py`. A fix or a feature pull request leaves both unchanged. Do not add a Debian revision `-N`. Follow [Land a Fix and Cut a Release](https://github.com/WLAN-Pi/developers/blob/cursor/releasing-howto-ab6b/RELEASING.md).
+Only a release pull request edits `debian/changelog` or `wlanpi_mcp/__version__.py`. A fix or a feature pull request leaves both unchanged. Do not add a Debian revision `-N`. Follow [Land a Fix and Cut a Release](https://github.com/WLAN-Pi/developers/blob/main/RELEASING.md).
 
 Today, `deploy-to-packagecloud.yml` builds and publishes to Packagecloud `wlanpi/dev` when `debian/changelog` changes on `main`. It fails if `wlanpi_mcp/__version__.py` differs from the changelog `major.minor.patch` (`0.7.0` matches `0.7.0-1`). The dev-build stamp is planned. It is not live yet. When it is, CI writes `X.Y.Z~dev<YYYYMMDD>.<run_id>.<run_attempt>+g<sha>` in the build workspace, uploads that `.deb` to Packagecloud `wlanpi/dev`, and does not tag it. Under that same CI, the release pull request uploads to `wlanpi/main` and tags `v<version>`.
 

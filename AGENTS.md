@@ -16,7 +16,7 @@ Read this first.
   `wlanpi_mcp/__version__.py`. A fix or a feature pull request leaves
   both unchanged. Do not add a Debian revision `-N`. The release sets
   both files to the same `major.minor.patch`. Follow
-  [Land a Fix and Cut a Release](https://github.com/WLAN-Pi/developers/blob/cursor/releasing-howto-ab6b/RELEASING.md).
+  [Land a Fix and Cut a Release](https://github.com/WLAN-Pi/developers/blob/main/RELEASING.md).
 - The dev-build stamp is planned. It is not live yet. When it is, CI
   writes `X.Y.Z~dev<YYYYMMDD>.<run_id>.<run_attempt>+g<sha>` in the build
   workspace, uploads that `.deb` to Packagecloud `wlanpi/dev`, and does
