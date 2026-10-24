@@ -12,11 +12,16 @@ Read this first.
   change is cohesive. Split only at real seams, never to hit a number. Put
   moves and formatting in separate commits from behavioral changes. Full policy:
   [developer guide](https://github.com/WLAN-Pi/developers/blob/main/CONTRIBUTING.md#pr-size-and-scope).
-- A version bump is a release. Only package-content changes bump
-  `debian/changelog`; CI-only or docs-only changes do not.
-- Keep `wlanpi_mcp/__version__.py` in sync with the deb version minus the
-  revision (e.g. `0.6.7` for `0.6.7-1`). The deploy workflow fails if they
-  diverge.
+- Only a release pull request edits `debian/changelog` or
+  `wlanpi_mcp/__version__.py`. A fix or a feature pull request leaves
+  both unchanged. Do not add a Debian revision `-N`. The release sets
+  both files to the same `major.minor.patch`. Follow
+  [Land a Fix and Cut a Release](https://github.com/WLAN-Pi/developers/blob/cursor/releasing-howto-ab6b/RELEASING.md).
+- The dev-build stamp is planned. It is not live yet. When it is, CI
+  writes `X.Y.Z~dev<YYYYMMDD>.<run_id>.<run_attempt>+g<sha>` in the build
+  workspace, uploads that `.deb` to Packagecloud `wlanpi/dev`, and does
+  not tag it. Under that same CI, the release pull request uploads to
+  `wlanpi/main` and tags `v<version>`.
 
 ## Tooling and gates
 
