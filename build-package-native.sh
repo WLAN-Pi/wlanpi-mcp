@@ -1,13 +1,4 @@
 #!/bin/bash
-#
-# Build wlanpi-mcp Debian package in a container (podman or docker)
-#
-# Usage: ./build-package-native.sh
-#
-# The container engine is auto-detected (podman preferred, then docker).
-# Override it explicitly with CONTAINER_ENGINE, e.g.:
-#   CONTAINER_ENGINE=docker ./build-package-native.sh
-#
 set -e
 
 if [ "$#" -ne 0 ]; then
@@ -18,7 +9,6 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Detect container engine (override with CONTAINER_ENGINE)
 if [ -n "$CONTAINER_ENGINE" ]; then
     ENGINE="$CONTAINER_ENGINE"
 elif command -v podman &> /dev/null; then
@@ -38,10 +28,6 @@ fi
 
 IMAGE="wlanpi-mcp-builder:trixie"
 
-# Clean up old build manifest, stale build trees, and previously built
-# packages. Without this, setuptools reuses build/lib and repackages files that
-# were deleted or renamed in the source tree, and stale .deb files in the repo
-# root get picked up by the manifest and deployed.
 rm -f .build-manifest.txt
 rm -rf build .pybuild
 rm -f wlanpi-mcp*.deb
@@ -59,7 +45,6 @@ echo "Step 2: Building Debian package in container..."
 echo "(This may take several minutes...)"
 echo ""
 
-# Run the build in container
 "$ENGINE" run --rm \
     -v "$(pwd)":/work:Z \
     -w /work \
@@ -80,9 +65,6 @@ cp -v /*.deb /work/ 2>/dev/null || echo "No .deb files found in container root"
 
 echo ""
 echo "Creating build manifest..."
-# List only the packages built in this run. The container root holds just the
-# output of this build; globbing /work would also match stale .deb files from
-# earlier builds and deploy the wrong version.
 ls -1 /*.deb 2>/dev/null | grep -v dbgsym | xargs -r -n1 basename > /work/.build-manifest.txt || true
 
 echo ""

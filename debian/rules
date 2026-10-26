@@ -1,5 +1,4 @@
 #!/usr/bin/make -f
-# -*- makefile -*-
 
 export DH_VIRTUALENV_INSTALL_ROOT=/opt
 
@@ -51,8 +50,6 @@ override_dh_virtualenv:
 	rm -rfv $(DH_VENV_DIR)/lib/python*/site-packages/wheel
 	rm -rfv $(DH_VENV_DIR)/lib/python*/site-packages/_distutils_hack
 	rm -rfv $(DH_VENV_DIR)/lib/python*/site-packages/distutils-precedence.pth
-	# Only remove dist-info for the stripped tooling above — runtime packages
-	# need their metadata for importlib.metadata (mcp calls version("mcp") at import)
 	rm -rfv $(DH_VENV_DIR)/lib/python*/site-packages/pip-*.dist-info
 	rm -rfv $(DH_VENV_DIR)/lib/python*/site-packages/setuptools-*.dist-info
 	rm -rfv $(DH_VENV_DIR)/lib/python*/site-packages/wheel-*.dist-info
