@@ -1,24 +1,15 @@
 #!/bin/bash
 #
-# Build wlanpi-mcp Debian package in a container (podman or docker)
-#
 # Usage: ./build-package-native.sh [SUITE]
-#   SUITE   Debian suite to build for (default: trixie). Override for local
-#           builds against another suite (for example forky).
-#
-# The container engine is auto-detected (podman preferred, then docker).
-# Override it explicitly with CONTAINER_ENGINE, e.g.:
-#   CONTAINER_ENGINE=docker ./build-package-native.sh trixie
+# SUITE defaults to trixie.
 #
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Debian suite to build for
 SUITE="${1:-trixie}"
 
-# Detect container engine (override with CONTAINER_ENGINE)
 if [ -n "$CONTAINER_ENGINE" ]; then
     ENGINE="$CONTAINER_ENGINE"
 elif command -v podman &> /dev/null; then

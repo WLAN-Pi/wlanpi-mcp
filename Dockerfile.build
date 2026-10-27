@@ -1,13 +1,3 @@
-# Dockerfile for building wlanpi-mcp Debian package
-#
-# Build for a specific Debian suite via SUITE (default trixie):
-#   podman build -f Dockerfile.build --build-arg SUITE=trixie -t wlanpi-mcp-builder .
-# Override SUITE for another release (for example forky):
-#   podman build -f Dockerfile.build --build-arg SUITE=forky -t wlanpi-mcp-builder .
-#
-# Works with docker too (swap podman -> docker). The build-package-native.sh
-# helper auto-detects podman or docker and passes SUITE through for you.
-
 ARG SUITE=trixie
 
 FROM debian:${SUITE}
