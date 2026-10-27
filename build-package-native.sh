@@ -1,8 +1,5 @@
 #!/bin/bash
-#
-# Usage: ./build-package-native.sh [SUITE]
-# SUITE defaults to trixie.
-#
+# Usage: ./build-package-native.sh [SUITE]. SUITE defaults to trixie.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -83,5 +80,5 @@ ls -lh wlanpi-mcp*.deb 2>/dev/null || echo "No wlanpi-mcp .deb files found"
 echo ""
 echo "To install the package:"
 echo "  sudo dpkg -i wlanpi-mcp*.deb"
-echo "  sudo apt-get install -f  # if there are dependency issues"
+echo "  sudo apt-get install -f"
 echo ""
