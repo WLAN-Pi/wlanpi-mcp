@@ -1,14 +1,24 @@
 #!/bin/bash
+#
+# Build wlanpi-mcp Debian package in a container (podman or docker)
+#
+# Usage: ./build-package-native.sh [SUITE]
+#   SUITE   Debian suite to build for (default: trixie). Override for local
+#           builds against another suite (for example forky).
+#
+# The container engine is auto-detected (podman preferred, then docker).
+# Override it explicitly with CONTAINER_ENGINE, e.g.:
+#   CONTAINER_ENGINE=docker ./build-package-native.sh trixie
+#
 set -e
-
-if [ "$#" -ne 0 ]; then
-    echo "ERROR: wlanpi-mcp builds for Debian trixie only." >&2
-    exit 1
-fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Debian suite to build for
+SUITE="${1:-trixie}"
+
+# Detect container engine (override with CONTAINER_ENGINE)
 if [ -n "$CONTAINER_ENGINE" ]; then
     ENGINE="$CONTAINER_ENGINE"
 elif command -v podman &> /dev/null; then
@@ -26,7 +36,7 @@ if ! command -v "$ENGINE" &> /dev/null; then
     exit 1
 fi
 
-IMAGE="wlanpi-mcp-builder:trixie"
+IMAGE="wlanpi-mcp-builder:${SUITE}"
 
 rm -f .build-manifest.txt
 rm -rf build .pybuild
@@ -35,10 +45,11 @@ rm -f wlanpi-mcp*.deb
 echo "========================================="
 echo "Building wlanpi-mcp Debian Package"
 echo "  engine: $ENGINE"
+echo "  suite:  $SUITE"
 echo "========================================="
 
 echo "Step 1: Building container image..."
-"$ENGINE" build -f Dockerfile.build -t "$IMAGE" .
+"$ENGINE" build -f Dockerfile.build --build-arg SUITE="$SUITE" -t "$IMAGE" .
 
 echo ""
 echo "Step 2: Building Debian package in container..."
