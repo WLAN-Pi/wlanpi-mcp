@@ -2,6 +2,10 @@
 
 Review rules for wlanpi-mcp. This is an on-device MCP server and a thin bridge to the wlanpi-core API at `https://localhost:31415`. Every tool and resource goes through that API (REST, or the capture WebSocket at `/api/v1/streaming/capture`). CI already runs `tox -e lint` (ruff, then mypy), `tox -e formatcheck`, and pytest on Python 3.13. Flag the gaps below.
 
+## Reporting Threshold
+
+Judge customer impact before you raise an implementation gap. Describe a realistic task, the normal steps a user takes, and what the user materially loses. Report a finding only when it would materially prevent or mislead a customer doing ordinary work. Omit a low-impact finding. Do not include it at a lower priority. The Flag rules below name changes that meet this bar.
+
 ## Python, typing, and tests
 
 - Bare `dict`, `list`, `set`, or `tuple`. `mypy.ini` sets `disallow_any_generics` and `disallow_untyped_defs`. JSON payloads are `dict[str, Any]`.
